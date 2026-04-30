@@ -1,0 +1,30 @@
+import { Repository } from 'typeorm';
+import { Entity } from './entity.entity';
+import { EntityData } from './entity-data.entity';
+import { CreateEntityDto } from './dto/create-entity.dto';
+import { UpdateEntityDto } from './dto/update-entity.dto';
+import { CreateEntityDataDto, UpdateEntityDataDto } from './dto/create-entity-data.dto';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+export declare class EntitiesService {
+    private entitiesRepository;
+    private entityDataRepository;
+    private subscriptionsService;
+    constructor(entitiesRepository: Repository<Entity>, entityDataRepository: Repository<EntityData>, subscriptionsService: SubscriptionsService);
+    create(createEntityDto: CreateEntityDto, userId: string, tenantId?: string): Promise<Entity>;
+    findAll(tenantId?: string): Promise<Entity[]>;
+    findOne(id: string, tenantId?: string): Promise<Entity>;
+    findBySlug(slug: string, tenantId?: string): Promise<Entity>;
+    update(id: string, updateEntityDto: UpdateEntityDto, userId: string, tenantId?: string): Promise<Entity>;
+    remove(id: string, tenantId?: string): Promise<void>;
+    private validateDynamicData;
+    createEntityData(createEntityDataDto: CreateEntityDataDto, userId: string, tenantId?: string): Promise<EntityData>;
+    findAllData(entityId: string, tenantId?: string): Promise<EntityData[]>;
+    findDataById(id: string, tenantId?: string): Promise<EntityData>;
+    updateData(id: string, updateEntityDataDto: UpdateEntityDataDto, userId: string, tenantId?: string): Promise<EntityData>;
+    removeData(id: string, tenantId?: string): Promise<void>;
+    searchData(entityId: string, query: string, tenantId?: string): Promise<EntityData[]>;
+    private validateEntityData;
+    private validateFieldType;
+    private validateFieldRules;
+    getEntityStats(entityId: string, tenantId?: string): Promise<any>;
+}
