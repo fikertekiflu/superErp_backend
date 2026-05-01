@@ -6,6 +6,7 @@ export declare class Plan {
     price: number;
     currency: string;
     interval: 'month' | 'year';
+    modules: string[];
     features: string[];
     limits: {
         maxUsers: number;

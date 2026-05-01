@@ -16,6 +16,11 @@ export declare class SubscriptionsService {
     upgradePlan(tenantId: string, planId: string): Promise<Subscription>;
     checkLimit(tenantId: string, limitKey: keyof Plan['limits'], currentCount: number): Promise<boolean>;
     findAllSubscriptions(): Promise<Subscription[]>;
-    updatePlan(id: string, data: any): Promise<Plan>;
+    updatePlan(id: string, data: {
+        price?: number;
+        limits?: any;
+        isActive?: boolean;
+        modules?: string[];
+    }): Promise<Plan | null>;
     createPlan(planData: Partial<Plan>): Promise<Plan>;
 }

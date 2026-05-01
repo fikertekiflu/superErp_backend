@@ -23,30 +23,30 @@ export class SubscriptionsService {
   private async seedDefaultPlans() {
     const defaultPlans = [
       {
-        name: 'Starter (Free)',
-        description: 'Perfect for exploring SuperERP capabilities.',
-        price: 0,
-        currency: 'ETB',
-        features: ['Up to 3 Users', 'Up to 5 Entities', 'Basic Workflows'],
-        limits: { maxUsers: 3, maxEntities: 5, maxWorkflows: 2 },
+        name: 'Starter',
+        price: 999,
+        interval: 'month' as const,
+        modules: ['invoicing', 'hrm_basic'],
+        limits: { maxUsers: 5, maxEntities: 10, maxWorkflows: 3 },
+        features: ['Basic CRM', 'Invoicing', 'Basic HRM', 'Email Support'],
         isActive: true,
       },
       {
         name: 'Professional',
-        description: 'Scale your business with advanced logic and more capacity.',
-        price: 2500,
-        currency: 'ETB',
-        features: ['Up to 15 Users', 'Unlimited Entities', 'Advanced Workflows', 'Priority Support'],
-        limits: { maxUsers: 15, maxEntities: 999, maxWorkflows: 20 },
+        price: 2499,
+        interval: 'month' as const,
+        modules: ['invoicing', 'hrm_advanced', 'attendance'],
+        limits: { maxUsers: 20, maxEntities: 50, maxWorkflows: 15 },
+        features: ['Advanced CRM', 'Advanced HRM', 'Attendance Tracking', 'Custom Workflows', 'Priority Support'],
         isActive: true,
       },
       {
         name: 'Enterprise',
-        description: 'Unlimited power for large scale organizations.',
-        price: 10000,
-        currency: 'ETB',
-        features: ['Unlimited everything', 'Custom Entities', 'Dedicated Account Manager', 'SLA Guarantee'],
-        limits: { maxUsers: 999, maxEntities: 999, maxWorkflows: 999 },
+        price: 5999,
+        interval: 'month' as const,
+        modules: ['invoicing', 'hrm_advanced', 'attendance', 'accounting'],
+        limits: { maxUsers: 100, maxEntities: 500, maxWorkflows: 100 },
+        features: ['Full Suite', 'Accounting Module', 'Audit Logs', '24/7 Dedicated Support'],
         isActive: true,
       },
     ];
@@ -182,9 +182,9 @@ export class SubscriptionsService {
     });
   }
 
-  async updatePlan(id: string, data: any) {
+  async updatePlan(id: string, data: { price?: number; limits?: any; isActive?: boolean; modules?: string[] }) {
     await this.planRepository.update(id, data);
-    return this.findPlanById(id);
+    return this.planRepository.findOne({ where: { id } });
   }
 
   async createPlan(planData: Partial<Plan>) {

@@ -9,7 +9,7 @@ export declare class SubscriptionsController {
     upgrade(planId: string, req: any): Promise<import("./subscription.entity").Subscription>;
     findAllSubscriptions(): Promise<import("./subscription.entity").Subscription[]>;
     findAllPlans(): Promise<import("./plan.entity").Plan[]>;
-    updatePlan(id: string, data: any): Promise<import("./plan.entity").Plan>;
+    updatePlan(id: string, data: any): Promise<import("./plan.entity").Plan | null>;
     checkout(planId: string, req: any): Promise<any>;
     verify(tx_ref: string, req: any): Promise<{
         status: string;

@@ -13,6 +13,8 @@ import { TenantsModule } from './modules/tenants/tenants.module';
 import { EntitiesModule } from './modules/entities/entities.module';
 import { WorkflowsModule } from './modules/workflows/workflows.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
+import { HrmModule } from './modules/hrm/hrm.module';
+import { InvoicesModule } from './modules/invoices/invoices.module';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { SubscriptionsModule } from './modules/subscriptions/subscriptions.modul
     EntitiesModule,
     WorkflowsModule,
     SubscriptionsModule,
+    HrmModule,
+    InvoicesModule,
   ],
   controllers: [AppController],
   providers: [AppService, DatabaseTestService],

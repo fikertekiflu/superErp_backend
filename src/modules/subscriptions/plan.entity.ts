@@ -28,6 +28,9 @@ export class Plan {
   @Column({ default: 'month' })
   interval: 'month' | 'year';
 
+  @Column('simple-array', { nullable: true })
+  modules: string[];
+
   @Column({ type: 'jsonb', nullable: true })
   features: string[];
 

@@ -19,6 +19,7 @@ let Plan = class Plan {
     price;
     currency;
     interval;
+    modules;
     features;
     limits;
     isActive;
@@ -51,6 +52,10 @@ __decorate([
     (0, typeorm_1.Column)({ default: 'month' }),
     __metadata("design:type", String)
 ], Plan.prototype, "interval", void 0);
+__decorate([
+    (0, typeorm_1.Column)('simple-array', { nullable: true }),
+    __metadata("design:type", Array)
+], Plan.prototype, "modules", void 0);
 __decorate([
     (0, typeorm_1.Column)({ type: 'jsonb', nullable: true }),
     __metadata("design:type", Array)
