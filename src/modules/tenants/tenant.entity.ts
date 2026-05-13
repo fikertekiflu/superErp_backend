@@ -12,6 +12,8 @@ export enum TenantStatus {
   INACTIVE = 'inactive',
   SUSPENDED = 'suspended',
   TRIAL = 'trial',
+  PENDING_VERIFICATION = 'pending_verification',
+  REJECTED = 'rejected',
 }
 
 export enum TenantPlan {
@@ -38,7 +40,7 @@ export class Tenant {
   @Column({
     type: 'enum',
     enum: TenantStatus,
-    default: TenantStatus.TRIAL,
+    default: TenantStatus.PENDING_VERIFICATION,
   })
   status: TenantStatus;
 
@@ -63,6 +65,22 @@ export class Tenant {
 
   @Column({ default: false })
   isOnboarded: boolean;
+
+  // Verification fields
+  @Column({ default: 'pending' })
+  verificationStatus: string; // 'pending' | 'submitted' | 'approved' | 'rejected'
+
+  @Column({ type: 'jsonb', nullable: true })
+  verificationDocuments: Array<{ name: string; fileUrl: string; type: string; uploadedAt: string }>;
+
+  @Column({ nullable: true })
+  rejectionReason: string;
+
+  @Column({ nullable: true })
+  verifiedAt: Date;
+
+  @Column({ nullable: true })
+  verifiedBy: string;
 
   @Column({ nullable: true })
   createdById: string;

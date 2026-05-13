@@ -12,6 +12,7 @@ import { User } from '../users/user.entity';
 import { Tenant } from '../tenants/tenant.entity';
 import { Entity as DynamicEntity } from '../entities/entity.entity';
 import { WorkflowStep } from './workflow-step.entity';
+import { WorkflowState } from './workflow-state.entity';
 
 export enum WorkflowStatus {
   DRAFT = 'draft',
@@ -70,6 +71,9 @@ export class Workflow {
 
   @OneToMany(() => WorkflowStep, (step) => step.workflow)
   steps: WorkflowStep[];
+
+  @OneToMany(() => WorkflowState, (state) => state.workflow)
+  states: WorkflowState[];
 
   @ManyToOne(() => Tenant)
   @JoinColumn({ name: 'tenantId' })

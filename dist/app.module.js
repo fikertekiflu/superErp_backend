@@ -24,6 +24,9 @@ const workflows_module_1 = require("./modules/workflows/workflows.module");
 const subscriptions_module_1 = require("./modules/subscriptions/subscriptions.module");
 const hrm_module_1 = require("./modules/hrm/hrm.module");
 const invoices_module_1 = require("./modules/invoices/invoices.module");
+const tasks_module_1 = require("./modules/tasks/tasks.module");
+const notifications_module_1 = require("./modules/notifications/notifications.module");
+const attendance_module_1 = require("./modules/attendance/attendance.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -47,6 +50,9 @@ exports.AppModule = AppModule = __decorate([
             subscriptions_module_1.SubscriptionsModule,
             hrm_module_1.HrmModule,
             invoices_module_1.InvoicesModule,
+            tasks_module_1.TasksModule,
+            notifications_module_1.NotificationsModule,
+            attendance_module_1.AttendanceModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService, database_test_service_1.DatabaseTestService],

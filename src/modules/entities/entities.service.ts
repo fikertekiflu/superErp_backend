@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ModuleRef } from '@nestjs/core';
 import { Entity, EntityStatus } from './entity.entity';
 import { EntityData } from './entity-data.entity';
 import { CreateEntityDto } from './dto/create-entity.dto';
@@ -15,6 +16,8 @@ import {
   UpdateEntityDataDto,
 } from './dto/create-entity-data.dto';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import { Workflow } from '../workflows/workflow.entity';
+import { WorkflowExecutionService } from '../workflows/workflow-execution.service';
 
 @Injectable()
 export class EntitiesService {
@@ -23,7 +26,10 @@ export class EntitiesService {
     private entitiesRepository: Repository<Entity>,
     @InjectRepository(EntityData)
     private entityDataRepository: Repository<EntityData>,
+    @InjectRepository(Workflow)
+    private workflowsRepository: Repository<Workflow>,
     private subscriptionsService: SubscriptionsService,
+    private moduleRef: ModuleRef,
   ) {}
 
   // Entity CRUD Operations
@@ -239,7 +245,19 @@ export class EntitiesService {
       createdById: userId,
     });
 
-    return this.entityDataRepository.save(entityData);
+    const saved = await this.entityDataRepository.save(entityData);
+
+    // Trigger matching workflows after data is created
+    await this.triggerWorkflowsForEntity(
+      entity.id,
+      entity.name,
+      saved.id,
+      saved.data,
+      userId,
+      tenantId,
+    );
+
+    return saved;
   }
 
   async findAllData(
@@ -451,5 +469,53 @@ export class EntitiesService {
       recentRecords,
       entityId,
     };
+  }
+
+  /**
+   * Trigger workflows that are linked to this entity and have event_based trigger
+   */
+  private async triggerWorkflowsForEntity(
+    entityId: string,
+    entityName: string,
+    dataId: string,
+    data: Record<string, any>,
+    userId: string,
+    tenantId?: string,
+  ): Promise<void> {
+    if (!tenantId) return;
+
+    try {
+      // Lazily resolve WorkflowExecutionService to avoid circular DI
+      const workflowExecutionService = this.moduleRef.get(WorkflowExecutionService, { strict: false });
+
+      // Find active workflows linked to this entity with event_based trigger
+      const workflows = await this.workflowsRepository.find({
+        where: { tenant: { id: tenantId }, status: 'active', trigger: 'event_based' },
+      });
+
+      for (const workflow of workflows) {
+        const isLinked = workflow.entityAssignments?.some(
+          (a: any) => a.entityId === entityId,
+        );
+        if (!isLinked) continue;
+
+        console.log(`🔥 Triggering workflow "${workflow.name}" for entity "${entityName}" (data ID: ${dataId})`);
+
+        await workflowExecutionService.triggerWorkflow(
+          workflow.id,
+          userId,
+          tenantId,
+          {
+            entityId: dataId,
+            entityType: entityName,
+            entityData: data,
+            triggerType: 'event_based',
+          },
+        );
+      }
+    } catch (error) {
+      // Don't fail the entity data creation if workflow trigger fails
+      console.error('Failed to trigger workflows for entity:', error);
+    }
   }
 }

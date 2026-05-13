@@ -15,6 +15,9 @@ import { WorkflowsModule } from './modules/workflows/workflows.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { HrmModule } from './modules/hrm/hrm.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
+import { TasksModule } from './modules/tasks/tasks.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AttendanceModule } from './modules/attendance/attendance.module';
 
 @Module({
   imports: [
@@ -35,6 +38,9 @@ import { InvoicesModule } from './modules/invoices/invoices.module';
     SubscriptionsModule,
     HrmModule,
     InvoicesModule,
+    TasksModule,
+    NotificationsModule,
+    AttendanceModule,
   ],
   controllers: [AppController],
   providers: [AppService, DatabaseTestService],

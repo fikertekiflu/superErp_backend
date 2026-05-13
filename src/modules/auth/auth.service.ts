@@ -247,7 +247,8 @@ export class AuthService {
             domain: companyDomain,
             description: companyDescription,
             createdById: user.id,
-            status: 'active' as any, // Cast to any to handle enum or string
+            status: 'pending_verification' as any,
+            verificationStatus: 'pending',
             isOnboarded: false,
           }),
         );
@@ -311,6 +312,7 @@ export class AuthService {
             description: tenant.description,
             isOnboarded: tenant.isOnboarded,
             status: tenant.status,
+            verificationStatus: (tenant as any).verificationStatus || 'pending',
           },
         };
       },

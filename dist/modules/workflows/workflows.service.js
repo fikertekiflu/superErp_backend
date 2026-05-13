@@ -18,16 +18,22 @@ const typeorm_1 = require("@nestjs/typeorm");
 const typeorm_2 = require("typeorm");
 const workflow_entity_1 = require("./workflow.entity");
 const workflow_step_entity_1 = require("./workflow-step.entity");
+const workflow_state_entity_1 = require("./workflow-state.entity");
+const workflow_transition_entity_1 = require("./workflow-transition.entity");
 const entity_entity_1 = require("../entities/entity.entity");
 const subscriptions_service_1 = require("../subscriptions/subscriptions.service");
 let WorkflowsService = class WorkflowsService {
     workflowsRepository;
     workflowStepsRepository;
+    workflowStatesRepository;
+    workflowTransitionsRepository;
     entitiesRepository;
     subscriptionsService;
-    constructor(workflowsRepository, workflowStepsRepository, entitiesRepository, subscriptionsService) {
+    constructor(workflowsRepository, workflowStepsRepository, workflowStatesRepository, workflowTransitionsRepository, entitiesRepository, subscriptionsService) {
         this.workflowsRepository = workflowsRepository;
         this.workflowStepsRepository = workflowStepsRepository;
+        this.workflowStatesRepository = workflowStatesRepository;
+        this.workflowTransitionsRepository = workflowTransitionsRepository;
         this.entitiesRepository = entitiesRepository;
         this.subscriptionsService = subscriptionsService;
     }
@@ -222,14 +228,123 @@ let WorkflowsService = class WorkflowsService {
             })),
         };
     }
+    async createState(workflowId, stateData, tenantId) {
+        const workflow = await this.workflowsRepository.findOne({
+            where: { id: workflowId, tenantId },
+        });
+        if (!workflow) {
+            throw new common_1.NotFoundException('Workflow not found');
+        }
+        const state = this.workflowStatesRepository.create({
+            ...stateData,
+            workflowId,
+        });
+        return await this.workflowStatesRepository.save(state);
+    }
+    async getStates(workflowId, tenantId) {
+        const workflow = await this.workflowsRepository.findOne({
+            where: { id: workflowId, tenantId },
+        });
+        if (!workflow) {
+            throw new common_1.NotFoundException('Workflow not found');
+        }
+        return await this.workflowStatesRepository.find({
+            where: { workflowId },
+            order: { order: 'ASC' },
+        });
+    }
+    async updateState(stateId, stateData, tenantId) {
+        const state = await this.workflowStatesRepository.findOne({
+            where: { id: stateId },
+            relations: ['workflow'],
+        });
+        if (!state || state.workflow.tenantId !== tenantId) {
+            throw new common_1.NotFoundException('State not found');
+        }
+        Object.assign(state, stateData);
+        return await this.workflowStatesRepository.save(state);
+    }
+    async deleteState(stateId, tenantId) {
+        const state = await this.workflowStatesRepository.findOne({
+            where: { id: stateId },
+            relations: ['workflow'],
+        });
+        if (!state || state.workflow.tenantId !== tenantId) {
+            throw new common_1.NotFoundException('State not found');
+        }
+        await this.workflowTransitionsRepository.delete([
+            { fromStateId: stateId },
+            { toStateId: stateId },
+        ]);
+        await this.workflowStatesRepository.delete(stateId);
+    }
+    async createTransition(workflowId, transitionData, tenantId) {
+        const workflow = await this.workflowsRepository.findOne({
+            where: { id: workflowId, tenantId },
+        });
+        if (!workflow) {
+            throw new common_1.NotFoundException('Workflow not found');
+        }
+        const fromState = await this.workflowStatesRepository.findOne({
+            where: { id: transitionData.fromStateId, workflowId },
+        });
+        const toState = await this.workflowStatesRepository.findOne({
+            where: { id: transitionData.toStateId, workflowId },
+        });
+        if (!fromState || !toState) {
+            throw new common_1.NotFoundException('State not found in this workflow');
+        }
+        const transition = this.workflowTransitionsRepository.create({
+            ...transitionData,
+            workflowId,
+        });
+        return await this.workflowTransitionsRepository.save(transition);
+    }
+    async getTransitions(workflowId, tenantId) {
+        const workflow = await this.workflowsRepository.findOne({
+            where: { id: workflowId, tenantId },
+        });
+        if (!workflow) {
+            throw new common_1.NotFoundException('Workflow not found');
+        }
+        return await this.workflowTransitionsRepository.find({
+            where: { workflowId },
+            relations: ['fromState', 'toState', 'requiredRole'],
+        });
+    }
+    async updateTransition(transitionId, transitionData, tenantId) {
+        const transition = await this.workflowTransitionsRepository.findOne({
+            where: { id: transitionId },
+            relations: ['workflow'],
+        });
+        if (!transition || transition.workflow.tenantId !== tenantId) {
+            throw new common_1.NotFoundException('Transition not found');
+        }
+        Object.assign(transition, transitionData);
+        return await this.workflowTransitionsRepository.save(transition);
+    }
+    async deleteTransition(transitionId, tenantId) {
+        const transition = await this.workflowTransitionsRepository.findOne({
+            where: { id: transitionId },
+            relations: ['workflow'],
+        });
+        if (!transition || transition.workflow.tenantId !== tenantId) {
+            throw new common_1.NotFoundException('Transition not found');
+        }
+        await this.workflowTransitionsRepository.delete(transitionId);
+    }
 };
 exports.WorkflowsService = WorkflowsService;
 exports.WorkflowsService = WorkflowsService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(workflow_entity_1.Workflow)),
     __param(1, (0, typeorm_1.InjectRepository)(workflow_step_entity_1.WorkflowStep)),
-    __param(2, (0, typeorm_1.InjectRepository)(entity_entity_1.Entity)),
+    __param(2, (0, typeorm_1.InjectRepository)(workflow_state_entity_1.WorkflowState)),
+    __param(3, (0, typeorm_1.InjectRepository)(workflow_transition_entity_1.WorkflowTransition)),
+    __param(4, (0, typeorm_1.InjectRepository)(entity_entity_1.Entity)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
         typeorm_2.Repository,
         typeorm_2.Repository,
         subscriptions_service_1.SubscriptionsService])

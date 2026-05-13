@@ -7,6 +7,7 @@ import {
   ManyToOne,
   ManyToMany,
   JoinTable,
+  Unique,
 } from 'typeorm';
 
 export enum UserRole {
@@ -24,11 +25,12 @@ export enum UserStatus {
 }
 
 @Entity('users')
+@Unique(['tenantId', 'email'])
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   email: string;
 
   @Column()

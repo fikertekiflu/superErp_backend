@@ -8,6 +8,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Workflow, WorkflowStatus, WorkflowTrigger } from './workflow.entity';
 import { WorkflowStep } from './workflow-step.entity';
+import { WorkflowState } from './workflow-state.entity';
+import { WorkflowTransition } from './workflow-transition.entity';
 import { CreateWorkflowDto } from './dto/create-workflow.dto';
 import { UpdateWorkflowDto } from './dto/update-workflow.dto';
 import { Entity as DynamicEntity } from '../entities/entity.entity';
@@ -20,6 +22,10 @@ export class WorkflowsService {
     private workflowsRepository: Repository<Workflow>,
     @InjectRepository(WorkflowStep)
     private workflowStepsRepository: Repository<WorkflowStep>,
+    @InjectRepository(WorkflowState)
+    private workflowStatesRepository: Repository<WorkflowState>,
+    @InjectRepository(WorkflowTransition)
+    private workflowTransitionsRepository: Repository<WorkflowTransition>,
     @InjectRepository(DynamicEntity)
     private entitiesRepository: Repository<DynamicEntity>,
     private subscriptionsService: SubscriptionsService,
@@ -318,5 +324,167 @@ export class WorkflowsService {
         createdBy: wf.createdBy?.firstName + ' ' + wf.createdBy?.lastName,
       })),
     };
+  }
+
+  // State management methods
+  async createState(
+    workflowId: string,
+    stateData: { name: string; key: string; description?: string; order?: number; metadata?: Record<string, any> },
+    tenantId: string,
+  ): Promise<WorkflowState> {
+    const workflow = await this.workflowsRepository.findOne({
+      where: { id: workflowId, tenantId },
+    });
+
+    if (!workflow) {
+      throw new NotFoundException('Workflow not found');
+    }
+
+    const state = this.workflowStatesRepository.create({
+      ...stateData,
+      workflowId,
+    });
+
+    return await this.workflowStatesRepository.save(state);
+  }
+
+  async getStates(workflowId: string, tenantId: string): Promise<WorkflowState[]> {
+    const workflow = await this.workflowsRepository.findOne({
+      where: { id: workflowId, tenantId },
+    });
+
+    if (!workflow) {
+      throw new NotFoundException('Workflow not found');
+    }
+
+    return await this.workflowStatesRepository.find({
+      where: { workflowId },
+      order: { order: 'ASC' },
+    });
+  }
+
+  async updateState(
+    stateId: string,
+    stateData: Partial<WorkflowState>,
+    tenantId: string,
+  ): Promise<WorkflowState> {
+    const state = await this.workflowStatesRepository.findOne({
+      where: { id: stateId },
+      relations: ['workflow'],
+    });
+
+    if (!state || state.workflow.tenantId !== tenantId) {
+      throw new NotFoundException('State not found');
+    }
+
+    Object.assign(state, stateData);
+    return await this.workflowStatesRepository.save(state);
+  }
+
+  async deleteState(stateId: string, tenantId: string): Promise<void> {
+    const state = await this.workflowStatesRepository.findOne({
+      where: { id: stateId },
+      relations: ['workflow'],
+    });
+
+    if (!state || state.workflow.tenantId !== tenantId) {
+      throw new NotFoundException('State not found');
+    }
+
+    await this.workflowTransitionsRepository.delete([
+      { fromStateId: stateId },
+      { toStateId: stateId },
+    ]);
+
+    await this.workflowStatesRepository.delete(stateId);
+  }
+
+  // Transition management methods
+  async createTransition(
+    workflowId: string,
+    transitionData: {
+      name: string;
+      description?: string;
+      fromStateId: string;
+      toStateId: string;
+      requiredRoleId?: string;
+      conditions?: any[];
+      actions?: any[];
+      metadata?: Record<string, any>;
+    },
+    tenantId: string,
+  ): Promise<WorkflowTransition> {
+    const workflow = await this.workflowsRepository.findOne({
+      where: { id: workflowId, tenantId },
+    });
+
+    if (!workflow) {
+      throw new NotFoundException('Workflow not found');
+    }
+
+    const fromState = await this.workflowStatesRepository.findOne({
+      where: { id: transitionData.fromStateId, workflowId },
+    });
+
+    const toState = await this.workflowStatesRepository.findOne({
+      where: { id: transitionData.toStateId, workflowId },
+    });
+
+    if (!fromState || !toState) {
+      throw new NotFoundException('State not found in this workflow');
+    }
+
+    const transition = this.workflowTransitionsRepository.create({
+      ...transitionData,
+      workflowId,
+    });
+
+    return await this.workflowTransitionsRepository.save(transition);
+  }
+
+  async getTransitions(workflowId: string, tenantId: string): Promise<WorkflowTransition[]> {
+    const workflow = await this.workflowsRepository.findOne({
+      where: { id: workflowId, tenantId },
+    });
+
+    if (!workflow) {
+      throw new NotFoundException('Workflow not found');
+    }
+
+    return await this.workflowTransitionsRepository.find({
+      where: { workflowId },
+      relations: ['fromState', 'toState', 'requiredRole'],
+    });
+  }
+
+  async updateTransition(
+    transitionId: string,
+    transitionData: Partial<WorkflowTransition>,
+    tenantId: string,
+  ): Promise<WorkflowTransition> {
+    const transition = await this.workflowTransitionsRepository.findOne({
+      where: { id: transitionId },
+      relations: ['workflow'],
+    });
+
+    if (!transition || transition.workflow.tenantId !== tenantId) {
+      throw new NotFoundException('Transition not found');
+    }
+
+    Object.assign(transition, transitionData);
+    return await this.workflowTransitionsRepository.save(transition);
+  }
+
+  async deleteTransition(transitionId: string, tenantId: string): Promise<void> {
+    const transition = await this.workflowTransitionsRepository.findOne({
+      where: { id: transitionId },
+      relations: ['workflow'],
+    });
+
+    if (!transition || transition.workflow.tenantId !== tenantId) {
+      throw new NotFoundException('Transition not found');
+    }
+
+    await this.workflowTransitionsRepository.delete(transitionId);
   }
 }

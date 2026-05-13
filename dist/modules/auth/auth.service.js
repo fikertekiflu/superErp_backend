@@ -223,7 +223,8 @@ let AuthService = class AuthService {
                 domain: companyDomain,
                 description: companyDescription,
                 createdById: user.id,
-                status: 'active',
+                status: 'pending_verification',
+                verificationStatus: 'pending',
                 isOnboarded: false,
             }));
             await transactionalEntityManager.update(user_entity_1.User, user.id, {
@@ -273,6 +274,7 @@ let AuthService = class AuthService {
                     description: tenant.description,
                     isOnboarded: tenant.isOnboarded,
                     status: tenant.status,
+                    verificationStatus: tenant.verificationStatus || 'pending',
                 },
             };
         });

@@ -23,8 +23,15 @@ export declare class WorkflowStep {
     order: number;
     config: {
         assignToRoles?: string[];
+        assignToDepartments?: string[];
         assignToUsers?: string[];
         requiredFields?: string[];
+        notificationType?: 'email' | 'dashboard' | 'both';
+        timeLimit?: number;
+        nextStepId?: string;
+        onRejectStepId?: string;
+        rejectionState?: string;
+        allowRejection?: boolean;
         conditions?: {
             field: string;
             operator: 'equals' | 'not_equals' | 'contains' | 'greater_than' | 'less_than';
@@ -34,7 +41,6 @@ export declare class WorkflowStep {
             type: 'create_entity' | 'update_entity' | 'send_notification' | 'update_field';
             config?: any;
         }[];
-        timeLimit?: number;
     };
     validationRules: {
         required: string[];

@@ -14,6 +14,7 @@ const typeorm_1 = require("typeorm");
 const user_entity_1 = require("../users/user.entity");
 const tenant_entity_1 = require("../tenants/tenant.entity");
 const workflow_step_entity_1 = require("./workflow-step.entity");
+const workflow_state_entity_1 = require("./workflow-state.entity");
 var WorkflowStatus;
 (function (WorkflowStatus) {
     WorkflowStatus["DRAFT"] = "draft";
@@ -38,6 +39,7 @@ let Workflow = class Workflow {
     config;
     entityAssignments;
     steps;
+    states;
     tenant;
     tenantId;
     createdBy;
@@ -81,6 +83,10 @@ __decorate([
     (0, typeorm_1.OneToMany)(() => workflow_step_entity_1.WorkflowStep, (step) => step.workflow),
     __metadata("design:type", Array)
 ], Workflow.prototype, "steps", void 0);
+__decorate([
+    (0, typeorm_1.OneToMany)(() => workflow_state_entity_1.WorkflowState, (state) => state.workflow),
+    __metadata("design:type", Array)
+], Workflow.prototype, "states", void 0);
 __decorate([
     (0, typeorm_1.ManyToOne)(() => tenant_entity_1.Tenant),
     (0, typeorm_1.JoinColumn)({ name: 'tenantId' }),

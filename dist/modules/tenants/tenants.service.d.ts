@@ -18,5 +18,13 @@ export declare class TenantsService {
         companySize: string;
         settings?: any;
     }): Promise<Tenant>;
+    submitDocuments(tenantId: string, documents: Array<{
+        name: string;
+        fileUrl: string;
+        type: string;
+    }>): Promise<Tenant>;
+    findPending(): Promise<Tenant[]>;
+    approveTenant(tenantId: string, adminUserId: string): Promise<Tenant>;
+    rejectTenant(tenantId: string, adminUserId: string, reason: string): Promise<Tenant>;
     private seedBlueprint;
 }

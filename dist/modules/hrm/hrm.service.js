@@ -16,17 +16,21 @@ exports.HrmService = void 0;
 const common_1 = require("@nestjs/common");
 const typeorm_1 = require("@nestjs/typeorm");
 const typeorm_2 = require("typeorm");
+const core_1 = require("@nestjs/core");
 const employee_entity_1 = require("./entities/employee.entity");
 const department_entity_1 = require("./entities/department.entity");
 const position_entity_1 = require("./entities/position.entity");
+const workflow_execution_service_1 = require("../workflows/workflow-execution.service");
 let HrmService = class HrmService {
     employeeRepository;
     departmentRepository;
     positionRepository;
-    constructor(employeeRepository, departmentRepository, positionRepository) {
+    moduleRef;
+    constructor(employeeRepository, departmentRepository, positionRepository, moduleRef) {
         this.employeeRepository = employeeRepository;
         this.departmentRepository = departmentRepository;
         this.positionRepository = positionRepository;
+        this.moduleRef = moduleRef;
     }
     async findAll(tenantId) {
         return this.employeeRepository.find({
@@ -62,12 +66,26 @@ let HrmService = class HrmService {
             throw new common_1.NotFoundException('Employee not found');
         return employee;
     }
-    async create(tenantId, data) {
+    async create(tenantId, data, createdBy) {
         const employee = this.employeeRepository.create({
             ...data,
             tenantId,
         });
-        return this.employeeRepository.save(employee);
+        const saved = await this.employeeRepository.save(employee);
+        try {
+            const workflowService = this.moduleRef.get(workflow_execution_service_1.WorkflowExecutionService, { strict: false });
+            await workflowService.triggerWorkflow('employee-onboarding', createdBy || 'system', tenantId, {
+                entityId: saved.id,
+                entityType: 'Employee',
+                entityData: saved,
+                triggerType: 'event_based',
+            });
+            console.log(`🔥 Employee onboarding workflow triggered for ${saved.firstName} ${saved.lastName}`);
+        }
+        catch (error) {
+            console.warn('Failed to trigger employee onboarding workflow:', error);
+        }
+        return saved;
     }
     async update(id, tenantId, data) {
         await this.findOne(id, tenantId);
@@ -87,6 +105,7 @@ exports.HrmService = HrmService = __decorate([
     __param(2, (0, typeorm_1.InjectRepository)(position_entity_1.Position)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
         typeorm_2.Repository,
-        typeorm_2.Repository])
+        typeorm_2.Repository,
+        core_1.ModuleRef])
 ], HrmService);
 //# sourceMappingURL=hrm.service.js.map

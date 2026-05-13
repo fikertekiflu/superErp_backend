@@ -48,9 +48,23 @@ export class WorkflowStep {
 
   @Column({ type: 'jsonb', nullable: true })
   config: {
+    // Assignment
     assignToRoles?: string[];
+    assignToDepartments?: string[];
     assignToUsers?: string[];
     requiredFields?: string[];
+    notificationType?: 'email' | 'dashboard' | 'both';
+    timeLimit?: number; // in hours
+    
+    // Branching logic
+    nextStepId?: string; // Next step on success/completion
+    onRejectStepId?: string; // Step to go to on rejection (optional)
+    
+    // Approval specific
+    rejectionState?: string; // State to transition to on rejection
+    allowRejection?: boolean; // Whether rejection is allowed
+    
+    // Conditions
     conditions?: {
       field: string;
       operator:
@@ -61,6 +75,8 @@ export class WorkflowStep {
         | 'less_than';
       value: any;
     }[];
+    
+    // Actions
     actions?: {
       type:
         | 'create_entity'
@@ -69,7 +85,6 @@ export class WorkflowStep {
         | 'update_field';
       config?: any;
     }[];
-    timeLimit?: number; // in hours
   };
 
   @Column({ type: 'jsonb', nullable: true })

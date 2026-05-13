@@ -10,10 +10,23 @@ exports.WorkflowsModule = void 0;
 const common_1 = require("@nestjs/common");
 const typeorm_1 = require("@nestjs/typeorm");
 const workflows_controller_1 = require("./workflows.controller");
+const workflow_executions_controller_1 = require("./workflow-executions.controller");
 const workflows_service_1 = require("./workflows.service");
+const workflow_execution_service_1 = require("./workflow-execution.service");
 const workflow_entity_1 = require("./workflow.entity");
+const workflow_state_entity_1 = require("./workflow-state.entity");
+const workflow_transition_entity_1 = require("./workflow-transition.entity");
+const workflow_event_entity_1 = require("./workflow-event.entity");
+const workflow_execution_entity_1 = require("./workflow-execution.entity");
 const workflow_step_entity_1 = require("./workflow-step.entity");
+const conditional_logic_service_1 = require("./conditional-logic.service");
 const entity_entity_1 = require("../entities/entity.entity");
+const task_entity_1 = require("../tasks/task.entity");
+const notification_entity_1 = require("../notifications/notification.entity");
+const user_entity_1 = require("../users/user.entity");
+const tenant_entity_1 = require("../tenants/tenant.entity");
+const employee_entity_1 = require("../hrm/entities/employee.entity");
+const department_entity_1 = require("../hrm/entities/department.entity");
 const subscriptions_module_1 = require("../subscriptions/subscriptions.module");
 let WorkflowsModule = class WorkflowsModule {
 };
@@ -21,12 +34,16 @@ exports.WorkflowsModule = WorkflowsModule;
 exports.WorkflowsModule = WorkflowsModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            typeorm_1.TypeOrmModule.forFeature([workflow_entity_1.Workflow, workflow_step_entity_1.WorkflowStep, entity_entity_1.Entity]),
+            typeorm_1.TypeOrmModule.forFeature([workflow_entity_1.Workflow, workflow_step_entity_1.WorkflowStep, workflow_execution_entity_1.WorkflowExecution, workflow_event_entity_1.WorkflowEvent, workflow_state_entity_1.WorkflowState, workflow_transition_entity_1.WorkflowTransition, entity_entity_1.Entity, task_entity_1.Task, notification_entity_1.Notification, user_entity_1.User, tenant_entity_1.Tenant, employee_entity_1.Employee, department_entity_1.Department]),
             subscriptions_module_1.SubscriptionsModule,
         ],
-        controllers: [workflows_controller_1.WorkflowsController],
-        providers: [workflows_service_1.WorkflowsService],
-        exports: [workflows_service_1.WorkflowsService],
+        controllers: [workflows_controller_1.WorkflowsController, workflow_executions_controller_1.WorkflowExecutionsController],
+        providers: [
+            workflows_service_1.WorkflowsService,
+            workflow_execution_service_1.WorkflowExecutionService,
+            conditional_logic_service_1.ConditionalLogicService,
+        ],
+        exports: [workflows_service_1.WorkflowsService, workflow_execution_service_1.WorkflowExecutionService],
     })
 ], WorkflowsModule);
 //# sourceMappingURL=workflows.module.js.map

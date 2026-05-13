@@ -18,6 +18,8 @@ const entity_entity_1 = require("../entities/entity.entity");
 const entity_data_entity_1 = require("../entities/entity-data.entity");
 const workflow_entity_1 = require("../workflows/workflow.entity");
 const workflow_step_entity_1 = require("../workflows/workflow-step.entity");
+const workflow_state_entity_1 = require("../workflows/workflow-state.entity");
+const workflow_transition_entity_1 = require("../workflows/workflow-transition.entity");
 const subscriptions_module_1 = require("../subscriptions/subscriptions.module");
 let TenantsModule = class TenantsModule {
 };
@@ -31,6 +33,8 @@ exports.TenantsModule = TenantsModule = __decorate([
                 entity_data_entity_1.EntityData,
                 workflow_entity_1.Workflow,
                 workflow_step_entity_1.WorkflowStep,
+                workflow_state_entity_1.WorkflowState,
+                workflow_transition_entity_1.WorkflowTransition,
             ]),
             subscriptions_module_1.SubscriptionsModule,
         ],

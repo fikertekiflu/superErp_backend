@@ -1,15 +1,19 @@
 import { Repository } from 'typeorm';
+import { ModuleRef } from '@nestjs/core';
 import { Entity } from './entity.entity';
 import { EntityData } from './entity-data.entity';
 import { CreateEntityDto } from './dto/create-entity.dto';
 import { UpdateEntityDto } from './dto/update-entity.dto';
 import { CreateEntityDataDto, UpdateEntityDataDto } from './dto/create-entity-data.dto';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import { Workflow } from '../workflows/workflow.entity';
 export declare class EntitiesService {
     private entitiesRepository;
     private entityDataRepository;
+    private workflowsRepository;
     private subscriptionsService;
-    constructor(entitiesRepository: Repository<Entity>, entityDataRepository: Repository<EntityData>, subscriptionsService: SubscriptionsService);
+    private moduleRef;
+    constructor(entitiesRepository: Repository<Entity>, entityDataRepository: Repository<EntityData>, workflowsRepository: Repository<Workflow>, subscriptionsService: SubscriptionsService, moduleRef: ModuleRef);
     create(createEntityDto: CreateEntityDto, userId: string, tenantId?: string): Promise<Entity>;
     findAll(tenantId?: string): Promise<Entity[]>;
     findOne(id: string, tenantId?: string): Promise<Entity>;
@@ -27,4 +31,5 @@ export declare class EntitiesService {
     private validateFieldType;
     private validateFieldRules;
     getEntityStats(entityId: string, tenantId?: string): Promise<any>;
+    private triggerWorkflowsForEntity;
 }

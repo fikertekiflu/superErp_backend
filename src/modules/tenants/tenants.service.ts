@@ -83,7 +83,8 @@ export class TenantsService {
   ): Promise<Tenant> {
     const tenant = await this.update(tenantId, {
       isOnboarded: true,
-      status: TenantStatus.ACTIVE,
+      // Don't set to ACTIVE — they need verification first
+      status: TenantStatus.PENDING_VERIFICATION,
     });
 
     const templateId = setupData.settings?.templateId;
@@ -92,6 +93,57 @@ export class TenantsService {
     }
 
     return tenant;
+  }
+
+  // === Verification Pipeline ===
+
+  async submitDocuments(
+    tenantId: string,
+    documents: Array<{ name: string; fileUrl: string; type: string }>,
+  ): Promise<Tenant> {
+    const tenant = await this.findOne(tenantId);
+    if (!tenant) throw new Error('Tenant not found');
+
+    const docsWithTimestamp = documents.map(doc => ({
+      ...doc,
+      uploadedAt: new Date().toISOString(),
+    }));
+
+    return this.update(tenantId, {
+      verificationDocuments: docsWithTimestamp,
+      verificationStatus: 'submitted',
+      status: TenantStatus.PENDING_VERIFICATION,
+      rejectionReason: null, // Clear any previous rejection
+    } as any);
+  }
+
+  async findPending(): Promise<Tenant[]> {
+    return this.tenantsRepository.find({
+      where: [
+        { verificationStatus: 'submitted' },
+        { status: TenantStatus.PENDING_VERIFICATION },
+      ],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async approveTenant(tenantId: string, adminUserId: string): Promise<Tenant> {
+    return this.update(tenantId, {
+      status: TenantStatus.ACTIVE,
+      verificationStatus: 'approved',
+      verifiedAt: new Date(),
+      verifiedBy: adminUserId,
+      rejectionReason: null,
+    } as any);
+  }
+
+  async rejectTenant(tenantId: string, adminUserId: string, reason: string): Promise<Tenant> {
+    return this.update(tenantId, {
+      status: TenantStatus.REJECTED,
+      verificationStatus: 'rejected',
+      rejectionReason: reason,
+      verifiedBy: adminUserId,
+    } as any);
   }
 
   private async seedBlueprint(

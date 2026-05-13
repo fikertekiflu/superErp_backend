@@ -16,17 +16,24 @@ exports.EntitiesService = void 0;
 const common_1 = require("@nestjs/common");
 const typeorm_1 = require("@nestjs/typeorm");
 const typeorm_2 = require("typeorm");
+const core_1 = require("@nestjs/core");
 const entity_entity_1 = require("./entity.entity");
 const entity_data_entity_1 = require("./entity-data.entity");
 const subscriptions_service_1 = require("../subscriptions/subscriptions.service");
+const workflow_entity_1 = require("../workflows/workflow.entity");
+const workflow_execution_service_1 = require("../workflows/workflow-execution.service");
 let EntitiesService = class EntitiesService {
     entitiesRepository;
     entityDataRepository;
+    workflowsRepository;
     subscriptionsService;
-    constructor(entitiesRepository, entityDataRepository, subscriptionsService) {
+    moduleRef;
+    constructor(entitiesRepository, entityDataRepository, workflowsRepository, subscriptionsService, moduleRef) {
         this.entitiesRepository = entitiesRepository;
         this.entityDataRepository = entityDataRepository;
+        this.workflowsRepository = workflowsRepository;
         this.subscriptionsService = subscriptionsService;
+        this.moduleRef = moduleRef;
     }
     async create(createEntityDto, userId, tenantId) {
         const existing = await this.entitiesRepository.findOne({
@@ -158,7 +165,9 @@ let EntitiesService = class EntitiesService {
             tenantId,
             createdById: userId,
         });
-        return this.entityDataRepository.save(entityData);
+        const saved = await this.entityDataRepository.save(entityData);
+        await this.triggerWorkflowsForEntity(entity.id, entity.name, saved.id, saved.data, userId, tenantId);
+        return saved;
     }
     async findAllData(entityId, tenantId) {
         await this.findOne(entityId, tenantId);
@@ -301,14 +310,42 @@ let EntitiesService = class EntitiesService {
             entityId,
         };
     }
+    async triggerWorkflowsForEntity(entityId, entityName, dataId, data, userId, tenantId) {
+        if (!tenantId)
+            return;
+        try {
+            const workflowExecutionService = this.moduleRef.get(workflow_execution_service_1.WorkflowExecutionService, { strict: false });
+            const workflows = await this.workflowsRepository.find({
+                where: { tenant: { id: tenantId }, status: 'active', trigger: 'event_based' },
+            });
+            for (const workflow of workflows) {
+                const isLinked = workflow.entityAssignments?.some((a) => a.entityId === entityId);
+                if (!isLinked)
+                    continue;
+                console.log(`🔥 Triggering workflow "${workflow.name}" for entity "${entityName}" (data ID: ${dataId})`);
+                await workflowExecutionService.triggerWorkflow(workflow.id, userId, tenantId, {
+                    entityId: dataId,
+                    entityType: entityName,
+                    entityData: data,
+                    triggerType: 'event_based',
+                });
+            }
+        }
+        catch (error) {
+            console.error('Failed to trigger workflows for entity:', error);
+        }
+    }
 };
 exports.EntitiesService = EntitiesService;
 exports.EntitiesService = EntitiesService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(entity_entity_1.Entity)),
     __param(1, (0, typeorm_1.InjectRepository)(entity_data_entity_1.EntityData)),
+    __param(2, (0, typeorm_1.InjectRepository)(workflow_entity_1.Workflow)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
         typeorm_2.Repository,
-        subscriptions_service_1.SubscriptionsService])
+        typeorm_2.Repository,
+        subscriptions_service_1.SubscriptionsService,
+        core_1.ModuleRef])
 ], EntitiesService);
 //# sourceMappingURL=entities.service.js.map

@@ -82,6 +82,38 @@ let WorkflowsController = class WorkflowsController {
         const tenantId = req.user.tenantId;
         return this.workflowsService.removeStep(stepId, tenantId);
     }
+    async createState(id, stateData, req) {
+        const tenantId = req.user.tenantId;
+        return this.workflowsService.createState(id, stateData, tenantId);
+    }
+    async getStates(id, req) {
+        const tenantId = req.user.tenantId;
+        return this.workflowsService.getStates(id, tenantId);
+    }
+    async updateState(stateId, stateData, req) {
+        const tenantId = req.user.tenantId;
+        return this.workflowsService.updateState(stateId, stateData, tenantId);
+    }
+    async deleteState(stateId, req) {
+        const tenantId = req.user.tenantId;
+        return this.workflowsService.deleteState(stateId, tenantId);
+    }
+    async createTransition(id, transitionData, req) {
+        const tenantId = req.user.tenantId;
+        return this.workflowsService.createTransition(id, transitionData, tenantId);
+    }
+    async getTransitions(id, req) {
+        const tenantId = req.user.tenantId;
+        return this.workflowsService.getTransitions(id, tenantId);
+    }
+    async updateTransition(transitionId, transitionData, req) {
+        const tenantId = req.user.tenantId;
+        return this.workflowsService.updateTransition(transitionId, transitionData, tenantId);
+    }
+    async deleteTransition(transitionId, req) {
+        const tenantId = req.user.tenantId;
+        return this.workflowsService.deleteTransition(transitionId, tenantId);
+    }
     async findOne(id, req) {
         return this.workflowsService.findOne(id, req.user.tenantId);
     }
@@ -241,6 +273,82 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], WorkflowsController.prototype, "removeStep", null);
+__decorate([
+    (0, common_1.Post)(':id/states'),
+    (0, swagger_1.ApiOperation)({ summary: 'Create a workflow state' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", Promise)
+], WorkflowsController.prototype, "createState", null);
+__decorate([
+    (0, common_1.Get)(':id/states'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get workflow states' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], WorkflowsController.prototype, "getStates", null);
+__decorate([
+    (0, common_1.Patch)('states/:stateId'),
+    (0, swagger_1.ApiOperation)({ summary: 'Update a workflow state' }),
+    __param(0, (0, common_1.Param)('stateId')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", Promise)
+], WorkflowsController.prototype, "updateState", null);
+__decorate([
+    (0, common_1.Delete)('states/:stateId'),
+    (0, swagger_1.ApiOperation)({ summary: 'Delete a workflow state' }),
+    __param(0, (0, common_1.Param)('stateId')),
+    __param(1, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], WorkflowsController.prototype, "deleteState", null);
+__decorate([
+    (0, common_1.Post)(':id/transitions'),
+    (0, swagger_1.ApiOperation)({ summary: 'Create a workflow transition' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", Promise)
+], WorkflowsController.prototype, "createTransition", null);
+__decorate([
+    (0, common_1.Get)(':id/transitions'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get workflow transitions' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], WorkflowsController.prototype, "getTransitions", null);
+__decorate([
+    (0, common_1.Patch)('transitions/:transitionId'),
+    (0, swagger_1.ApiOperation)({ summary: 'Update a workflow transition' }),
+    __param(0, (0, common_1.Param)('transitionId')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", Promise)
+], WorkflowsController.prototype, "updateTransition", null);
+__decorate([
+    (0, common_1.Delete)('transitions/:transitionId'),
+    (0, swagger_1.ApiOperation)({ summary: 'Delete a workflow transition' }),
+    __param(0, (0, common_1.Param)('transitionId')),
+    __param(1, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], WorkflowsController.prototype, "deleteTransition", null);
 __decorate([
     (0, common_1.Get)(':id'),
     (0, swagger_1.ApiParam)({ name: 'id', description: 'Workflow ID' }),

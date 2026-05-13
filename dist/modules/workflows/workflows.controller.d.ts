@@ -17,5 +17,13 @@ export declare class WorkflowsController {
     addStep(id: string, stepData: any, req: any): Promise<import("./workflow-step.entity").WorkflowStep>;
     updateStep(stepId: string, stepData: any, req: any): Promise<import("./workflow-step.entity").WorkflowStep>;
     removeStep(stepId: string, req: any): Promise<void>;
+    createState(id: string, stateData: any, req: any): Promise<import("./workflow-state.entity").WorkflowState>;
+    getStates(id: string, req: any): Promise<import("./workflow-state.entity").WorkflowState[]>;
+    updateState(stateId: string, stateData: any, req: any): Promise<import("./workflow-state.entity").WorkflowState>;
+    deleteState(stateId: string, req: any): Promise<void>;
+    createTransition(id: string, transitionData: any, req: any): Promise<import("./workflow-transition.entity").WorkflowTransition>;
+    getTransitions(id: string, req: any): Promise<import("./workflow-transition.entity").WorkflowTransition[]>;
+    updateTransition(transitionId: string, transitionData: any, req: any): Promise<import("./workflow-transition.entity").WorkflowTransition>;
+    deleteTransition(transitionId: string, req: any): Promise<void>;
     findOne(id: string, req: any): Promise<import("./workflow.entity").Workflow>;
 }

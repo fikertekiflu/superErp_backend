@@ -2,7 +2,9 @@ export declare enum TenantStatus {
     ACTIVE = "active",
     INACTIVE = "inactive",
     SUSPENDED = "suspended",
-    TRIAL = "trial"
+    TRIAL = "trial",
+    PENDING_VERIFICATION = "pending_verification",
+    REJECTED = "rejected"
 }
 export declare enum TenantPlan {
     BASIC = "basic",
@@ -22,6 +24,16 @@ export declare class Tenant {
     maxStorageMB: number;
     settings: Record<string, any>;
     isOnboarded: boolean;
+    verificationStatus: string;
+    verificationDocuments: Array<{
+        name: string;
+        fileUrl: string;
+        type: string;
+        uploadedAt: string;
+    }>;
+    rejectionReason: string;
+    verifiedAt: Date;
+    verifiedBy: string;
     createdById: string;
     createdAt: Date;
     updatedAt: Date;

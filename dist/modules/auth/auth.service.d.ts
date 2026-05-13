@@ -66,6 +66,7 @@ export declare class AuthService {
             description: string;
             isOnboarded: boolean;
             status: import("../tenants/tenant.entity").TenantStatus;
+            verificationStatus: any;
         };
     }>;
 }

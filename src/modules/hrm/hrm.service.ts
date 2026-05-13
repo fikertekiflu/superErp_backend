@@ -1,9 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ModuleRef } from '@nestjs/core';
 import { Employee } from './entities/employee.entity';
 import { Department } from './entities/department.entity';
 import { Position } from './entities/position.entity';
+import { WorkflowExecutionService } from '../workflows/workflow-execution.service';
 
 @Injectable()
 export class HrmService {
@@ -14,6 +16,7 @@ export class HrmService {
     private departmentRepository: Repository<Department>,
     @InjectRepository(Position)
     private positionRepository: Repository<Position>,
+    private moduleRef: ModuleRef,
   ) {}
 
   async findAll(tenantId: string): Promise<Employee[]> {
@@ -59,12 +62,33 @@ export class HrmService {
     return employee;
   }
 
-  async create(tenantId: string, data: Partial<Employee>): Promise<Employee> {
+  async create(tenantId: string, data: Partial<Employee>, createdBy?: string): Promise<Employee> {
     const employee = this.employeeRepository.create({
       ...data,
       tenantId,
     });
-    return this.employeeRepository.save(employee);
+    const saved = await this.employeeRepository.save(employee);
+
+    // Trigger employee onboarding workflows
+    try {
+      const workflowService = this.moduleRef.get(WorkflowExecutionService, { strict: false });
+      await workflowService.triggerWorkflow(
+        'employee-onboarding', // This would be the workflow ID/name
+        createdBy || 'system',
+        tenantId,
+        {
+          entityId: saved.id,
+          entityType: 'Employee',
+          entityData: saved,
+          triggerType: 'event_based',
+        },
+      );
+      console.log(`🔥 Employee onboarding workflow triggered for ${saved.firstName} ${saved.lastName}`);
+    } catch (error) {
+      console.warn('Failed to trigger employee onboarding workflow:', error);
+    }
+
+    return saved;
   }
 
   async update(id: string, tenantId: string, data: Partial<Employee>): Promise<Employee> {

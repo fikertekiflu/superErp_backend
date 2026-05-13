@@ -1,6 +1,7 @@
 import { User } from '../users/user.entity';
 import { Tenant } from '../tenants/tenant.entity';
 import { WorkflowStep } from './workflow-step.entity';
+import { WorkflowState } from './workflow-state.entity';
 export declare enum WorkflowStatus {
     DRAFT = "draft",
     ACTIVE = "active",
@@ -40,6 +41,7 @@ export declare class Workflow {
         };
     }[];
     steps: WorkflowStep[];
+    states: WorkflowState[];
     tenant: Tenant;
     tenantId: string;
     createdBy: User;

@@ -44,6 +44,27 @@ let TenantsController = class TenantsController {
     async updateMe(updateData, req) {
         return this.tenantsService.update(req.user.tenantId, updateData);
     }
+    async submitDocuments(body, req) {
+        return this.tenantsService.submitDocuments(req.user.tenantId, body.documents);
+    }
+    async findPending(req) {
+        if (req.user.role !== 'super_admin') {
+            throw new Error('Only super admin can view pending tenants');
+        }
+        return this.tenantsService.findPending();
+    }
+    async approveTenant(id, req) {
+        if (req.user.role !== 'super_admin') {
+            throw new Error('Only super admin can approve tenants');
+        }
+        return this.tenantsService.approveTenant(id, req.user.userId);
+    }
+    async rejectTenant(id, req, body) {
+        if (req.user.role !== 'super_admin') {
+            throw new Error('Only super admin can reject tenants');
+        }
+        return this.tenantsService.rejectTenant(id, req.user.userId, body.reason);
+    }
 };
 exports.TenantsController = TenantsController;
 __decorate([
@@ -107,6 +128,46 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], TenantsController.prototype, "updateMe", null);
+__decorate([
+    (0, common_1.Patch)('submit-documents'),
+    (0, swagger_1.ApiOperation)({ summary: 'Submit verification documents' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Documents submitted for review' }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], TenantsController.prototype, "submitDocuments", null);
+__decorate([
+    (0, common_1.Get)('pending'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get all pending verification tenants (super admin only)' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Pending tenants retrieved' }),
+    __param(0, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], TenantsController.prototype, "findPending", null);
+__decorate([
+    (0, common_1.Patch)(':id/approve'),
+    (0, swagger_1.ApiOperation)({ summary: 'Approve a tenant (super admin only)' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Tenant approved' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], TenantsController.prototype, "approveTenant", null);
+__decorate([
+    (0, common_1.Patch)(':id/reject'),
+    (0, swagger_1.ApiOperation)({ summary: 'Reject a tenant (super admin only)' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Tenant rejected' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Request)()),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", Promise)
+], TenantsController.prototype, "rejectTenant", null);
 exports.TenantsController = TenantsController = __decorate([
     (0, swagger_1.ApiTags)('tenants'),
     (0, common_1.Controller)('tenants'),

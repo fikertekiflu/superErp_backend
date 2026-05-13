@@ -4,11 +4,12 @@ import { EntitiesController } from './entities.controller';
 import { EntitiesService } from './entities.service';
 import { Entity } from './entity.entity';
 import { EntityData } from './entity-data.entity';
+import { Workflow } from '../workflows/workflow.entity';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Entity, EntityData]),
+    TypeOrmModule.forFeature([Entity, EntityData, Workflow]),
     SubscriptionsModule,
   ],
   controllers: [EntitiesController],

@@ -9,6 +9,8 @@ import { Entity } from '../entities/entity.entity';
 import { EntityData } from '../entities/entity-data.entity';
 import { Workflow } from '../workflows/workflow.entity';
 import { WorkflowStep } from '../workflows/workflow-step.entity';
+import { WorkflowState } from '../workflows/workflow-state.entity';
+import { WorkflowTransition } from '../workflows/workflow-transition.entity';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
 @Module({
@@ -19,6 +21,8 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
       EntityData,
       Workflow,
       WorkflowStep,
+      WorkflowState,
+      WorkflowTransition,
     ]),
     SubscriptionsModule,
   ],

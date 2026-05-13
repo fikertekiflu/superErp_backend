@@ -1,6 +1,8 @@
 import { Repository } from 'typeorm';
 import { Workflow } from './workflow.entity';
 import { WorkflowStep } from './workflow-step.entity';
+import { WorkflowState } from './workflow-state.entity';
+import { WorkflowTransition } from './workflow-transition.entity';
 import { CreateWorkflowDto } from './dto/create-workflow.dto';
 import { UpdateWorkflowDto } from './dto/update-workflow.dto';
 import { Entity as DynamicEntity } from '../entities/entity.entity';
@@ -8,9 +10,11 @@ import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 export declare class WorkflowsService {
     private workflowsRepository;
     private workflowStepsRepository;
+    private workflowStatesRepository;
+    private workflowTransitionsRepository;
     private entitiesRepository;
     private subscriptionsService;
-    constructor(workflowsRepository: Repository<Workflow>, workflowStepsRepository: Repository<WorkflowStep>, entitiesRepository: Repository<DynamicEntity>, subscriptionsService: SubscriptionsService);
+    constructor(workflowsRepository: Repository<Workflow>, workflowStepsRepository: Repository<WorkflowStep>, workflowStatesRepository: Repository<WorkflowState>, workflowTransitionsRepository: Repository<WorkflowTransition>, entitiesRepository: Repository<DynamicEntity>, subscriptionsService: SubscriptionsService);
     create(createWorkflowDto: CreateWorkflowDto, userId: string, tenantId?: string): Promise<Workflow>;
     findAll(tenantId?: string): Promise<Workflow[]>;
     findOne(id: string, tenantId?: string): Promise<Workflow>;
@@ -25,4 +29,27 @@ export declare class WorkflowsService {
     updateStep(stepId: string, stepData: any, tenantId?: string): Promise<WorkflowStep>;
     removeStep(stepId: string, tenantId?: string): Promise<void>;
     getWorkflowStats(tenantId?: string): Promise<any>;
+    createState(workflowId: string, stateData: {
+        name: string;
+        key: string;
+        description?: string;
+        order?: number;
+        metadata?: Record<string, any>;
+    }, tenantId: string): Promise<WorkflowState>;
+    getStates(workflowId: string, tenantId: string): Promise<WorkflowState[]>;
+    updateState(stateId: string, stateData: Partial<WorkflowState>, tenantId: string): Promise<WorkflowState>;
+    deleteState(stateId: string, tenantId: string): Promise<void>;
+    createTransition(workflowId: string, transitionData: {
+        name: string;
+        description?: string;
+        fromStateId: string;
+        toStateId: string;
+        requiredRoleId?: string;
+        conditions?: any[];
+        actions?: any[];
+        metadata?: Record<string, any>;
+    }, tenantId: string): Promise<WorkflowTransition>;
+    getTransitions(workflowId: string, tenantId: string): Promise<WorkflowTransition[]>;
+    updateTransition(transitionId: string, transitionData: Partial<WorkflowTransition>, tenantId: string): Promise<WorkflowTransition>;
+    deleteTransition(transitionId: string, tenantId: string): Promise<void>;
 }

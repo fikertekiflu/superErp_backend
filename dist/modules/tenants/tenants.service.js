@@ -72,13 +72,54 @@ let TenantsService = class TenantsService {
     async completeOnboarding(tenantId, userId, setupData) {
         const tenant = await this.update(tenantId, {
             isOnboarded: true,
-            status: tenant_entity_1.TenantStatus.ACTIVE,
+            status: tenant_entity_1.TenantStatus.PENDING_VERIFICATION,
         });
         const templateId = setupData.settings?.templateId;
         if (templateId) {
             await this.seedBlueprint(tenantId, userId, templateId);
         }
         return tenant;
+    }
+    async submitDocuments(tenantId, documents) {
+        const tenant = await this.findOne(tenantId);
+        if (!tenant)
+            throw new Error('Tenant not found');
+        const docsWithTimestamp = documents.map(doc => ({
+            ...doc,
+            uploadedAt: new Date().toISOString(),
+        }));
+        return this.update(tenantId, {
+            verificationDocuments: docsWithTimestamp,
+            verificationStatus: 'submitted',
+            status: tenant_entity_1.TenantStatus.PENDING_VERIFICATION,
+            rejectionReason: null,
+        });
+    }
+    async findPending() {
+        return this.tenantsRepository.find({
+            where: [
+                { verificationStatus: 'submitted' },
+                { status: tenant_entity_1.TenantStatus.PENDING_VERIFICATION },
+            ],
+            order: { createdAt: 'DESC' },
+        });
+    }
+    async approveTenant(tenantId, adminUserId) {
+        return this.update(tenantId, {
+            status: tenant_entity_1.TenantStatus.ACTIVE,
+            verificationStatus: 'approved',
+            verifiedAt: new Date(),
+            verifiedBy: adminUserId,
+            rejectionReason: null,
+        });
+    }
+    async rejectTenant(tenantId, adminUserId, reason) {
+        return this.update(tenantId, {
+            status: tenant_entity_1.TenantStatus.REJECTED,
+            verificationStatus: 'rejected',
+            rejectionReason: reason,
+            verifiedBy: adminUserId,
+        });
     }
     async seedBlueprint(tenantId, userId, templateId) {
         console.log(`Seeding blueprint ${templateId} for tenant ${tenantId}`);

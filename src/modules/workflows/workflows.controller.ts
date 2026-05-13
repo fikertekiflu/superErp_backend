@@ -179,6 +179,80 @@ export class WorkflowsController {
     return this.workflowsService.removeStep(stepId, tenantId);
   }
 
+  // State endpoints
+  @Post(':id/states')
+  @ApiOperation({ summary: 'Create a workflow state' })
+  async createState(
+    @Param('id') id: string,
+    @Body() stateData: any,
+    @Request() req,
+  ) {
+    const tenantId = req.user.tenantId;
+    return this.workflowsService.createState(id, stateData, tenantId);
+  }
+
+  @Get(':id/states')
+  @ApiOperation({ summary: 'Get workflow states' })
+  async getStates(@Param('id') id: string, @Request() req) {
+    const tenantId = req.user.tenantId;
+    return this.workflowsService.getStates(id, tenantId);
+  }
+
+  @Patch('states/:stateId')
+  @ApiOperation({ summary: 'Update a workflow state' })
+  async updateState(
+    @Param('stateId') stateId: string,
+    @Body() stateData: any,
+    @Request() req,
+  ) {
+    const tenantId = req.user.tenantId;
+    return this.workflowsService.updateState(stateId, stateData, tenantId);
+  }
+
+  @Delete('states/:stateId')
+  @ApiOperation({ summary: 'Delete a workflow state' })
+  async deleteState(@Param('stateId') stateId: string, @Request() req) {
+    const tenantId = req.user.tenantId;
+    return this.workflowsService.deleteState(stateId, tenantId);
+  }
+
+  // Transition endpoints
+  @Post(':id/transitions')
+  @ApiOperation({ summary: 'Create a workflow transition' })
+  async createTransition(
+    @Param('id') id: string,
+    @Body() transitionData: any,
+    @Request() req,
+  ) {
+    const tenantId = req.user.tenantId;
+    return this.workflowsService.createTransition(id, transitionData, tenantId);
+  }
+
+  @Get(':id/transitions')
+  @ApiOperation({ summary: 'Get workflow transitions' })
+  async getTransitions(@Param('id') id: string, @Request() req) {
+    const tenantId = req.user.tenantId;
+    return this.workflowsService.getTransitions(id, tenantId);
+  }
+
+  @Patch('transitions/:transitionId')
+  @ApiOperation({ summary: 'Update a workflow transition' })
+  async updateTransition(
+    @Param('transitionId') transitionId: string,
+    @Body() transitionData: any,
+    @Request() req,
+  ) {
+    const tenantId = req.user.tenantId;
+    return this.workflowsService.updateTransition(transitionId, transitionData, tenantId);
+  }
+
+  @Delete('transitions/:transitionId')
+  @ApiOperation({ summary: 'Delete a workflow transition' })
+  async deleteTransition(@Param('transitionId') transitionId: string, @Request() req) {
+    const tenantId = req.user.tenantId;
+    return this.workflowsService.deleteTransition(transitionId, tenantId);
+  }
+
   @Get(':id')
   @ApiParam({ name: 'id', description: 'Workflow ID' })
   @ApiOperation({ summary: 'Get workflow by ID' })

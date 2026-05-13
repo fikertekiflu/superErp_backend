@@ -55,7 +55,7 @@ __decorate([
     __metadata("design:type", String)
 ], User.prototype, "id", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ unique: true }),
+    (0, typeorm_1.Column)(),
     __metadata("design:type", String)
 ], User.prototype, "email", void 0);
 __decorate([
@@ -152,6 +152,7 @@ __decorate([
     __metadata("design:type", Array)
 ], User.prototype, "roles", void 0);
 exports.User = User = __decorate([
-    (0, typeorm_1.Entity)('users')
+    (0, typeorm_1.Entity)('users'),
+    (0, typeorm_1.Unique)(['tenantId', 'email'])
 ], User);
 //# sourceMappingURL=user.entity.js.map

@@ -48,6 +48,7 @@ export declare class AuthController {
             description: string;
             isOnboarded: boolean;
             status: import("../tenants/tenant.entity").TenantStatus;
+            verificationStatus: any;
         };
     }>;
     createSuperAdmin(): Promise<{

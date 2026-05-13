@@ -17,6 +17,8 @@ var TenantStatus;
     TenantStatus["INACTIVE"] = "inactive";
     TenantStatus["SUSPENDED"] = "suspended";
     TenantStatus["TRIAL"] = "trial";
+    TenantStatus["PENDING_VERIFICATION"] = "pending_verification";
+    TenantStatus["REJECTED"] = "rejected";
 })(TenantStatus || (exports.TenantStatus = TenantStatus = {}));
 var TenantPlan;
 (function (TenantPlan) {
@@ -37,6 +39,11 @@ let Tenant = class Tenant {
     maxStorageMB;
     settings;
     isOnboarded;
+    verificationStatus;
+    verificationDocuments;
+    rejectionReason;
+    verifiedAt;
+    verifiedBy;
     createdById;
     createdAt;
     updatedAt;
@@ -64,7 +71,7 @@ __decorate([
     (0, typeorm_1.Column)({
         type: 'enum',
         enum: TenantStatus,
-        default: TenantStatus.TRIAL,
+        default: TenantStatus.PENDING_VERIFICATION,
     }),
     __metadata("design:type", String)
 ], Tenant.prototype, "status", void 0);
@@ -96,6 +103,26 @@ __decorate([
     (0, typeorm_1.Column)({ default: false }),
     __metadata("design:type", Boolean)
 ], Tenant.prototype, "isOnboarded", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ default: 'pending' }),
+    __metadata("design:type", String)
+], Tenant.prototype, "verificationStatus", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'jsonb', nullable: true }),
+    __metadata("design:type", Array)
+], Tenant.prototype, "verificationDocuments", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], Tenant.prototype, "rejectionReason", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", Date)
+], Tenant.prototype, "verifiedAt", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], Tenant.prototype, "verifiedBy", void 0);
 __decorate([
     (0, typeorm_1.Column)({ nullable: true }),
     __metadata("design:type", String)
