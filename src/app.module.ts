@@ -18,6 +18,7 @@ import { InvoicesModule } from './modules/invoices/invoices.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
+import { AccountingModule } from './modules/accounting/accounting.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { AttendanceModule } from './modules/attendance/attendance.module';
     TasksModule,
     NotificationsModule,
     AttendanceModule,
+    AccountingModule,
   ],
   controllers: [AppController],
   providers: [AppService, DatabaseTestService],

@@ -37,31 +37,29 @@ let AttendanceService = class AttendanceService {
         this.employeeRepository = employeeRepository;
         this.tenantRepository = tenantRepository;
     }
-    async checkIn(employeeId, data, tenantId) {
+    async checkIn(employeeId, data, tenantId, targetDate) {
         const employee = await this.employeeRepository.findOne({
             where: { id: employeeId, tenantId }
         });
         if (!employee) {
             throw new common_1.NotFoundException('Employee not found');
         }
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
+        const checkDate = targetDate || new Date();
+        const checkDateStr = checkDate.toISOString().split('T')[0];
         const existingAttendance = await this.attendanceRepository.findOne({
             where: {
                 employeeId,
-                attendanceDate: (0, typeorm_2.Between)(today, tomorrow),
+                attendanceDate: (0, typeorm_2.Equal)(checkDateStr),
                 tenantId
             }
         });
         if (existingAttendance && existingAttendance.checkInTime) {
-            throw new common_1.BadRequestException('Already checked in today');
+            throw new common_1.BadRequestException(`Already checked in for ${checkDateStr}`);
         }
         const policy = await this.getApplicablePolicy(employeeId, tenantId);
         const attendance = existingAttendance || this.attendanceRepository.create({
             employeeId,
-            attendanceDate: today,
+            attendanceDate: checkDateStr,
             tenantId
         });
         attendance.checkInTime = new Date();
@@ -90,24 +88,22 @@ let AttendanceService = class AttendanceService {
         await this.attendanceLogRepository.save(checkInLog);
         return attendance;
     }
-    async checkOut(employeeId, data, tenantId) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
+    async checkOut(employeeId, data, tenantId, targetDate) {
+        const checkDate = targetDate || new Date();
+        const checkDateStr = checkDate.toISOString().split('T')[0];
         const attendance = await this.attendanceRepository.findOne({
             where: {
                 employeeId,
-                attendanceDate: (0, typeorm_2.Between)(today, tomorrow),
+                attendanceDate: (0, typeorm_2.Equal)(checkDateStr),
                 tenantId
             },
             relations: ['policy']
         });
         if (!attendance || !attendance.checkInTime) {
-            throw new common_1.BadRequestException('No check-in record found for today');
+            throw new common_1.BadRequestException(`No check-in record found for ${checkDateStr}`);
         }
         if (attendance.checkOutTime) {
-            throw new common_1.BadRequestException('Already checked out today');
+            throw new common_1.BadRequestException(`Already checked out for ${checkDateStr}`);
         }
         attendance.checkOutTime = new Date();
         const totalMinutes = this.calculateMinutesDifference(attendance.checkInTime, attendance.checkOutTime);
@@ -138,24 +134,23 @@ let AttendanceService = class AttendanceService {
         return attendance;
     }
     async getAttendanceByDate(employeeId, date, tenantId) {
-        const startOfDay = new Date(date);
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date(startOfDay);
-        endOfDay.setDate(endOfDay.getDate() + 1);
+        const dateStr = new Date(date).toISOString().split('T')[0];
         return this.attendanceRepository.findOne({
             where: {
                 employeeId,
-                attendanceDate: (0, typeorm_2.Between)(startOfDay, endOfDay),
+                attendanceDate: (0, typeorm_2.Equal)(dateStr),
                 tenantId
             },
             relations: ['policy', 'logs']
         });
     }
     async getAttendanceHistory(employeeId, startDate, endDate, tenantId) {
+        const startStr = new Date(startDate).toISOString().split('T')[0];
+        const endStr = new Date(endDate).toISOString().split('T')[0];
         return this.attendanceRepository.find({
             where: {
                 employeeId,
-                attendanceDate: (0, typeorm_2.Between)(startDate, endDate),
+                attendanceDate: (0, typeorm_2.Between)(startStr, endStr),
                 tenantId
             },
             relations: ['policy', 'adjustments'],
@@ -166,8 +161,8 @@ let AttendanceService = class AttendanceService {
         const attendances = await this.getAttendanceHistory(employeeId, startDate, endDate, tenantId);
         const summary = attendances.reduce((acc, attendance) => {
             acc.totalDays++;
-            acc.totalHours += attendance.totalHours;
-            acc.overtimeHours += attendance.overtimeHours;
+            acc.totalHours += Number(attendance.totalHours || 0);
+            acc.overtimeHours += Number(attendance.overtimeHours || 0);
             switch (attendance.status) {
                 case attendance_entity_1.AttendanceStatus.PRESENT:
                     acc.presentDays++;
@@ -274,13 +269,10 @@ let AttendanceService = class AttendanceService {
         return (end.getTime() - start.getTime()) / (1000 * 60);
     }
     async getDailyAttendance(date, tenantId) {
-        const startOfDay = new Date(date);
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date(startOfDay);
-        endOfDay.setDate(endOfDay.getDate() + 1);
+        const dateStr = new Date(date).toISOString().split('T')[0];
         return this.attendanceRepository.find({
             where: {
-                attendanceDate: (0, typeorm_2.Between)(startOfDay, endOfDay),
+                attendanceDate: (0, typeorm_2.Equal)(dateStr),
                 tenantId
             },
             relations: ['employee'],

@@ -12,6 +12,7 @@ export declare class AttendanceController {
     hrCheckIn(body: {
         employeeId: string;
         notes?: string;
+        date?: string;
     }, req: any): Promise<Attendance>;
     checkOut(body: {
         notes?: string;
@@ -19,6 +20,7 @@ export declare class AttendanceController {
     hrCheckOut(body: {
         employeeId: string;
         notes?: string;
+        date?: string;
     }, req: any): Promise<Attendance>;
     getTodayAttendance(req: any): Promise<Attendance | null>;
     getAttendanceHistory(startDate: string, endDate: string, req: any, employeeId?: string): Promise<Attendance[]>;

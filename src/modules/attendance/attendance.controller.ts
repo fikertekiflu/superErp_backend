@@ -64,15 +64,18 @@ export class AttendanceController {
     @Body() body: {
       employeeId: string;
       notes?: string;
+      date?: string; // optional YYYY-MM-DD override date
     },
     @Request() req
   ): Promise<Attendance> {
     const tenantId = req.user.tenantId;
+    const targetDate = body.date ? new Date(body.date) : new Date();
     
     return this.attendanceService.checkIn(
       body.employeeId,
       { notes: body.notes },
-      tenantId
+      tenantId,
+      targetDate
     );
   }
 
@@ -106,15 +109,18 @@ export class AttendanceController {
     @Body() body: {
       employeeId: string;
       notes?: string;
+      date?: string; // optional YYYY-MM-DD override date
     },
     @Request() req
   ): Promise<Attendance> {
     const tenantId = req.user.tenantId;
+    const targetDate = body.date ? new Date(body.date) : new Date();
     
     return this.attendanceService.checkOut(
       body.employeeId,
       { notes: body.notes },
-      tenantId
+      tenantId,
+      targetDate
     );
   }
 

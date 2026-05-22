@@ -27,6 +27,7 @@ const invoices_module_1 = require("./modules/invoices/invoices.module");
 const tasks_module_1 = require("./modules/tasks/tasks.module");
 const notifications_module_1 = require("./modules/notifications/notifications.module");
 const attendance_module_1 = require("./modules/attendance/attendance.module");
+const accounting_module_1 = require("./modules/accounting/accounting.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -53,6 +54,7 @@ exports.AppModule = AppModule = __decorate([
             tasks_module_1.TasksModule,
             notifications_module_1.NotificationsModule,
             attendance_module_1.AttendanceModule,
+            accounting_module_1.AccountingModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService, database_test_service_1.DatabaseTestService],

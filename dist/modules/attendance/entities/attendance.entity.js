@@ -53,6 +53,7 @@ let Attendance = class Attendance {
     tenantId;
     tenant;
     policy;
+    adjustments;
     createdAt;
     updatedAt;
 };
@@ -153,6 +154,10 @@ __decorate([
     (0, typeorm_1.ManyToOne)(() => attendance_policy_entity_1.AttendancePolicy, { nullable: true }),
     __metadata("design:type", Object)
 ], Attendance.prototype, "policy", void 0);
+__decorate([
+    (0, typeorm_1.OneToMany)('AttendanceAdjustment', 'attendance'),
+    __metadata("design:type", Array)
+], Attendance.prototype, "adjustments", void 0);
 __decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)

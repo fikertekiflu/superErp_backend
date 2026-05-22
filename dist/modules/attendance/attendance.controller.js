@@ -30,7 +30,8 @@ let AttendanceController = class AttendanceController {
     }
     async hrCheckIn(body, req) {
         const tenantId = req.user.tenantId;
-        return this.attendanceService.checkIn(body.employeeId, { notes: body.notes }, tenantId);
+        const targetDate = body.date ? new Date(body.date) : new Date();
+        return this.attendanceService.checkIn(body.employeeId, { notes: body.notes }, tenantId, targetDate);
     }
     async checkOut(body, req) {
         const employeeId = req.user.userId;
@@ -39,7 +40,8 @@ let AttendanceController = class AttendanceController {
     }
     async hrCheckOut(body, req) {
         const tenantId = req.user.tenantId;
-        return this.attendanceService.checkOut(body.employeeId, { notes: body.notes }, tenantId);
+        const targetDate = body.date ? new Date(body.date) : new Date();
+        return this.attendanceService.checkOut(body.employeeId, { notes: body.notes }, tenantId, targetDate);
     }
     async getTodayAttendance(req) {
         const employeeId = req.user.userId;

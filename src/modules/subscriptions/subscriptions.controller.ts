@@ -23,7 +23,6 @@ import { ChapaService } from './chapa.service';
 
 @ApiTags('subscriptions')
 @Controller('subscriptions')
-@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class SubscriptionsController {
   constructor(
@@ -38,6 +37,7 @@ export class SubscriptionsController {
   }
 
   @Get('my-subscription')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Get current tenant subscription' })
   async getMySubscription(@Request() req) {
     const tenantId = req.user.tenantId;
@@ -45,6 +45,7 @@ export class SubscriptionsController {
   }
 
   @Post('upgrade/:planId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Upgrade or change subscription plan' })
   async upgrade(@Param('planId') planId: string, @Request() req) {
     const tenantId = req.user.tenantId;
@@ -52,6 +53,7 @@ export class SubscriptionsController {
   }
 
   @Get('admin-all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Get all tenant subscriptions (Admin only)' })
   async findAllSubscriptions() {
@@ -59,6 +61,7 @@ export class SubscriptionsController {
   }
 
   @Get('admin-plans')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Get all plans (Admin only)' })
   async findAllPlans() {
@@ -66,6 +69,7 @@ export class SubscriptionsController {
   }
 
   @Patch('admin-plans/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Update a subscription plan (Admin only)' })
   async updatePlan(@Param('id') id: string, @Body() data: any) {
@@ -73,6 +77,7 @@ export class SubscriptionsController {
   }
 
   @Post('checkout/:planId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Initialize Chapa payment for a plan' })
   async checkout(@Param('planId') planId: string, @Request() req) {
     const tenantId = req.user.tenantId;
@@ -106,6 +111,7 @@ export class SubscriptionsController {
   }
 
   @Get('verify/:tx_ref')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Verify Chapa payment' })
   async verify(@Param('tx_ref') tx_ref: string, @Request() req) {
     const tenantId = req.user.tenantId;
@@ -139,6 +145,8 @@ export class SubscriptionsController {
   }
 
   @Post('admin/plans')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Create a new plan (Admin only)' })
   async createPlan(@Body() planData: any) {
     // In a real app, we would add a RoleGuard(SUPER_ADMIN) here

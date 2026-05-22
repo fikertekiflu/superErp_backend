@@ -15,10 +15,10 @@ export declare class AttendanceService {
     constructor(attendanceRepository: Repository<Attendance>, attendanceLogRepository: Repository<AttendanceLog>, policyRepository: Repository<AttendancePolicy>, adjustmentRepository: Repository<AttendanceAdjustment>, employeeRepository: Repository<Employee>, tenantRepository: Repository<Tenant>);
     checkIn(employeeId: string, data: {
         notes?: string;
-    }, tenantId: string): Promise<Attendance>;
+    }, tenantId: string, targetDate?: Date): Promise<Attendance>;
     checkOut(employeeId: string, data: {
         notes?: string;
-    }, tenantId: string): Promise<Attendance>;
+    }, tenantId: string, targetDate?: Date): Promise<Attendance>;
     getAttendanceByDate(employeeId: string, date: Date, tenantId: string): Promise<Attendance | null>;
     getAttendanceHistory(employeeId: string, startDate: Date, endDate: Date, tenantId: string): Promise<Attendance[]>;
     getAttendanceSummary(employeeId: string, startDate: Date, endDate: Date, tenantId: string): Promise<{

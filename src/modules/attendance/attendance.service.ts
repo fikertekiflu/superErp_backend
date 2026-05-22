@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
+import { Repository, Between, LessThanOrEqual, MoreThanOrEqual, Equal } from 'typeorm';
 import { Attendance, AttendanceStatus, CheckType } from './entities/attendance.entity';
 import { AttendanceLog } from './entities/attendance.entity';
 import { AttendancePolicy } from './entities/attendance-policy.entity';
@@ -31,7 +31,8 @@ export class AttendanceService {
     data: {
       notes?: string;
     },
-    tenantId: string
+    tenantId: string,
+    targetDate?: Date  // optional: used by HR override to specify a different date
   ): Promise<Attendance> {
     // Validate employee exists
     const employee = await this.employeeRepository.findOne({
@@ -41,22 +42,20 @@ export class AttendanceService {
       throw new NotFoundException('Employee not found');
     }
 
-    // Check if already checked in today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    // Use the provided date or default to today
+    const checkDate = targetDate || new Date();
+    const checkDateStr = checkDate.toISOString().split('T')[0];
 
     const existingAttendance = await this.attendanceRepository.findOne({
       where: {
         employeeId,
-        attendanceDate: Between(today, tomorrow),
+        attendanceDate: Equal(checkDateStr) as any,
         tenantId
       }
     });
 
     if (existingAttendance && existingAttendance.checkInTime) {
-      throw new BadRequestException('Already checked in today');
+      throw new BadRequestException(`Already checked in for ${checkDateStr}`);
     }
 
     // Get applicable policy
@@ -65,11 +64,11 @@ export class AttendanceService {
     // Create or update attendance record
     const attendance = existingAttendance || this.attendanceRepository.create({
       employeeId,
-      attendanceDate: today,
+      attendanceDate: checkDateStr as any,
       tenantId
     });
 
-    // Always set check-in time when checking in
+    // Set check-in time
     attendance.checkInTime = new Date();
     if (policy?.standardCheckIn) attendance.scheduledCheckIn = policy.standardCheckIn;
     if (policy?.standardCheckOut) attendance.scheduledCheckOut = policy.standardCheckOut;
@@ -110,29 +109,28 @@ export class AttendanceService {
     data: {
       notes?: string;
     },
-    tenantId: string
+    tenantId: string,
+    targetDate?: Date  // optional: used by HR override to specify a different date
   ): Promise<Attendance> {
-    // Find today's attendance
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    // Use the provided date or default to today
+    const checkDate = targetDate || new Date();
+    const checkDateStr = checkDate.toISOString().split('T')[0];
 
     const attendance = await this.attendanceRepository.findOne({
       where: {
         employeeId,
-        attendanceDate: Between(today, tomorrow),
+        attendanceDate: Equal(checkDateStr) as any,
         tenantId
       },
       relations: ['policy']
     });
 
     if (!attendance || !attendance.checkInTime) {
-      throw new BadRequestException('No check-in record found for today');
+      throw new BadRequestException(`No check-in record found for ${checkDateStr}`);
     }
 
     if (attendance.checkOutTime) {
-      throw new BadRequestException('Already checked out today');
+      throw new BadRequestException(`Already checked out for ${checkDateStr}`);
     }
 
     // Update checkout time
@@ -188,15 +186,13 @@ export class AttendanceService {
     date: Date,
     tenantId: string
   ): Promise<Attendance | null> {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(startOfDay);
-    endOfDay.setDate(endOfDay.getDate() + 1);
+    // Format to YYYY-MM-DD to match PostgreSQL `date` column exactly
+    const dateStr = new Date(date).toISOString().split('T')[0];
 
     return this.attendanceRepository.findOne({
       where: {
         employeeId,
-        attendanceDate: Between(startOfDay, endOfDay),
+        attendanceDate: Equal(dateStr) as any,
         tenantId
       },
       relations: ['policy', 'logs']
@@ -209,10 +205,14 @@ export class AttendanceService {
     endDate: Date,
     tenantId: string
   ): Promise<Attendance[]> {
+    // Format as YYYY-MM-DD strings so Between matches the PostgreSQL `date` column correctly
+    const startStr = new Date(startDate).toISOString().split('T')[0];
+    const endStr = new Date(endDate).toISOString().split('T')[0];
+
     return this.attendanceRepository.find({
       where: {
         employeeId,
-        attendanceDate: Between(startDate, endDate),
+        attendanceDate: Between(startStr, endStr) as any,
         tenantId
       },
       relations: ['policy', 'adjustments'],
@@ -239,8 +239,8 @@ export class AttendanceService {
     
     const summary = attendances.reduce((acc, attendance) => {
       acc.totalDays++;
-      acc.totalHours += attendance.totalHours;
-      acc.overtimeHours += attendance.overtimeHours;
+      acc.totalHours += Number(attendance.totalHours || 0);
+      acc.overtimeHours += Number(attendance.overtimeHours || 0);
 
       switch (attendance.status) {
         case AttendanceStatus.PRESENT:
@@ -391,14 +391,12 @@ export class AttendanceService {
   }
 
   async getDailyAttendance(date: Date, tenantId: string): Promise<Attendance[]> {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(startOfDay);
-    endOfDay.setDate(endOfDay.getDate() + 1);
+    // Use date-only string so Equal matches the PostgreSQL `date` column exactly
+    const dateStr = new Date(date).toISOString().split('T')[0];
 
     return this.attendanceRepository.find({
       where: {
-        attendanceDate: Between(startOfDay, endOfDay),
+        attendanceDate: Equal(dateStr) as any,
         tenantId
       },
       relations: ['employee'],

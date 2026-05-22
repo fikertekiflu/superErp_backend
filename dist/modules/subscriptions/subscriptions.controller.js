@@ -108,6 +108,7 @@ __decorate([
 ], SubscriptionsController.prototype, "getPlans", null);
 __decorate([
     (0, common_1.Get)('my-subscription'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, swagger_1.ApiOperation)({ summary: 'Get current tenant subscription' }),
     __param(0, (0, common_1.Request)()),
     __metadata("design:type", Function),
@@ -116,6 +117,7 @@ __decorate([
 ], SubscriptionsController.prototype, "getMySubscription", null);
 __decorate([
     (0, common_1.Post)('upgrade/:planId'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, swagger_1.ApiOperation)({ summary: 'Upgrade or change subscription plan' }),
     __param(0, (0, common_1.Param)('planId')),
     __param(1, (0, common_1.Request)()),
@@ -125,6 +127,7 @@ __decorate([
 ], SubscriptionsController.prototype, "upgrade", null);
 __decorate([
     (0, common_1.Get)('admin-all'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPER_ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Get all tenant subscriptions (Admin only)' }),
     __metadata("design:type", Function),
@@ -133,6 +136,7 @@ __decorate([
 ], SubscriptionsController.prototype, "findAllSubscriptions", null);
 __decorate([
     (0, common_1.Get)('admin-plans'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPER_ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Get all plans (Admin only)' }),
     __metadata("design:type", Function),
@@ -141,6 +145,7 @@ __decorate([
 ], SubscriptionsController.prototype, "findAllPlans", null);
 __decorate([
     (0, common_1.Patch)('admin-plans/:id'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPER_ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Update a subscription plan (Admin only)' }),
     __param(0, (0, common_1.Param)('id')),
@@ -151,6 +156,7 @@ __decorate([
 ], SubscriptionsController.prototype, "updatePlan", null);
 __decorate([
     (0, common_1.Post)('checkout/:planId'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, swagger_1.ApiOperation)({ summary: 'Initialize Chapa payment for a plan' }),
     __param(0, (0, common_1.Param)('planId')),
     __param(1, (0, common_1.Request)()),
@@ -160,6 +166,7 @@ __decorate([
 ], SubscriptionsController.prototype, "checkout", null);
 __decorate([
     (0, common_1.Get)('verify/:tx_ref'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, swagger_1.ApiOperation)({ summary: 'Verify Chapa payment' }),
     __param(0, (0, common_1.Param)('tx_ref')),
     __param(1, (0, common_1.Request)()),
@@ -169,6 +176,8 @@ __decorate([
 ], SubscriptionsController.prototype, "verify", null);
 __decorate([
     (0, common_1.Post)('admin/plans'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPER_ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Create a new plan (Admin only)' }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -178,7 +187,6 @@ __decorate([
 exports.SubscriptionsController = SubscriptionsController = __decorate([
     (0, swagger_1.ApiTags)('subscriptions'),
     (0, common_1.Controller)('subscriptions'),
-    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, swagger_1.ApiBearerAuth)(),
     __metadata("design:paramtypes", [subscriptions_service_1.SubscriptionsService,
         chapa_service_1.ChapaService])

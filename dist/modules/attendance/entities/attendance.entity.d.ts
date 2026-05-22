@@ -43,6 +43,7 @@ export declare class Attendance {
     tenantId: string;
     tenant: Tenant;
     policy: AttendancePolicy | null;
+    adjustments: any[];
     createdAt: Date;
     updatedAt: Date;
 }

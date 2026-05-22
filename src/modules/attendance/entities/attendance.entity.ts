@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany } from 'typeorm';
 import { Tenant } from '../../tenants/tenant.entity';
 import { Employee } from '../../hrm/entities/employee.entity';
 import { AttendancePolicy } from './attendance-policy.entity';
@@ -97,6 +97,9 @@ export class Attendance {
 
   @ManyToOne(() => AttendancePolicy, { nullable: true })
   policy: AttendancePolicy | null;
+
+  @OneToMany('AttendanceAdjustment', 'attendance')
+  adjustments: any[];
 
   @CreateDateColumn()
   createdAt: Date;
