@@ -1,11 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ModuleRef } from '@nestjs/core';
 import { Employee } from './entities/employee.entity';
 import { Department } from './entities/department.entity';
 import { Position } from './entities/position.entity';
-import { WorkflowExecutionService } from '../workflows/workflow-execution.service';
+import { WorkflowTriggerService } from '../workflows/workflow-trigger.service';
 
 @Injectable()
 export class HrmService {
@@ -16,7 +15,7 @@ export class HrmService {
     private departmentRepository: Repository<Department>,
     @InjectRepository(Position)
     private positionRepository: Repository<Position>,
-    private moduleRef: ModuleRef,
+    private workflowTriggerService: WorkflowTriggerService,
   ) {}
 
   async findAll(tenantId: string): Promise<Employee[]> {
@@ -69,23 +68,26 @@ export class HrmService {
     });
     const saved = await this.employeeRepository.save(employee);
 
-    // Trigger employee onboarding workflows
+    // Trigger workflows linked to Employee entity (same as creating an entity record)
     try {
-      const workflowService = this.moduleRef.get(WorkflowExecutionService, { strict: false });
-      await workflowService.triggerWorkflow(
-        'employee-onboarding', // This would be the workflow ID/name
-        createdBy || 'system',
+      await this.workflowTriggerService.triggerForEntitySlugs(
         tenantId,
+        ['employee', 'employees'],
+        saved.id,
         {
-          entityId: saved.id,
-          entityType: 'Employee',
-          entityData: saved,
-          triggerType: 'event_based',
+          email: saved.email,
+          firstName: saved.firstName,
+          lastName: saved.lastName,
+          phone: saved.phoneNumber,
+          phoneNumber: saved.phoneNumber,
+          department: saved.department,
+          position: saved.position,
+          status: saved.status,
         },
+        createdBy || saved.id,
       );
-      console.log(`🔥 Employee onboarding workflow triggered for ${saved.firstName} ${saved.lastName}`);
     } catch (error) {
-      console.warn('Failed to trigger employee onboarding workflow:', error);
+      console.warn('Failed to trigger workflows for new employee:', error);
     }
 
     return saved;

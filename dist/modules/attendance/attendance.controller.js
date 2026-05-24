@@ -62,7 +62,7 @@ let AttendanceController = class AttendanceController {
     async getTeamAttendance(req, date) {
         const tenantId = req.user.tenantId;
         const targetDate = date ? new Date(date) : new Date();
-        return [];
+        return this.attendanceService.getTeamAttendance(targetDate, tenantId);
     }
     async getDailyAttendance(req, date) {
         const tenantId = req.user.tenantId;
@@ -79,7 +79,8 @@ let AttendanceController = class AttendanceController {
         return this.attendanceService.requestAdjustment(employeeId, body, tenantId);
     }
     async getAdjustments(req, status, employeeId) {
-        return [];
+        const tenantId = req.user.tenantId;
+        return this.attendanceService.listAdjustments(tenantId, status, employeeId);
     }
     async approveAdjustment(id, body, req) {
         const approvedById = req.user.userId;
@@ -87,13 +88,14 @@ let AttendanceController = class AttendanceController {
         return this.attendanceService.approveAdjustment(id, approvedById, tenantId, body.approved, body.rejectionReason);
     }
     async getAttendanceLogs(startDate, endDate, req, employeeId) {
-        return [];
+        const tenantId = req.user.tenantId;
+        return this.attendanceService.listAttendanceLogs(tenantId, new Date(startDate), new Date(endDate), employeeId);
     }
     async getPolicies(req) {
-        return [];
+        return this.attendanceService.listPolicies(req.user.tenantId);
     }
     async createPolicy(policyData, req) {
-        return {};
+        return this.attendanceService.createPolicy(req.user.tenantId, policyData);
     }
 };
 exports.AttendanceController = AttendanceController;

@@ -45,6 +45,8 @@ export declare class WorkflowExecution {
     }[];
     context: {
         entityId?: string;
+        recordId?: string;
+        entityDefinitionId?: string;
         entityType?: string;
         entityData?: Record<string, any>;
         triggerType?: string;

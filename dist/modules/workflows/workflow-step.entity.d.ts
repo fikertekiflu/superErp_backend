@@ -30,8 +30,14 @@ export declare class WorkflowStep {
         timeLimit?: number;
         nextStepId?: string;
         onRejectStepId?: string;
+        onRejectAction?: 'cancel' | 'goto';
+        onTrueStepId?: string;
+        onFalseStepId?: string;
+        onFalseAction?: 'complete' | 'next' | 'goto';
+        matchMode?: 'all' | 'any';
         rejectionState?: string;
         allowRejection?: boolean;
+        approvalAmountField?: string;
         conditions?: {
             field: string;
             operator: 'equals' | 'not_equals' | 'contains' | 'greater_than' | 'less_than';

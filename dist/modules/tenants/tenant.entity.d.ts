@@ -26,10 +26,15 @@ export declare class Tenant {
     isOnboarded: boolean;
     verificationStatus: string;
     verificationDocuments: Array<{
+        id?: string;
         name: string;
-        fileUrl: string;
         type: string;
         uploadedAt: string;
+        fileUrl?: string;
+        fileName?: string;
+        mimeType?: string;
+        storagePath?: string;
+        fileSize?: number;
     }>;
     rejectionReason: string;
     verifiedAt: Date;

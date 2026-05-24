@@ -26,6 +26,7 @@ export declare class User {
     passwordResetToken: string;
     passwordResetExpiresAt: Date;
     isActive: boolean;
+    approvalLimitOverride?: number | null;
     createdAt: Date;
     updatedAt: Date;
     tenant: any;

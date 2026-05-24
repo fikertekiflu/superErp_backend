@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var SubscriptionsService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SubscriptionsService = void 0;
 const common_1 = require("@nestjs/common");
@@ -19,10 +20,11 @@ const typeorm_2 = require("typeorm");
 const plan_entity_1 = require("./plan.entity");
 const subscription_entity_1 = require("./subscription.entity");
 const tenant_entity_1 = require("../tenants/tenant.entity");
-let SubscriptionsService = class SubscriptionsService {
+let SubscriptionsService = SubscriptionsService_1 = class SubscriptionsService {
     planRepository;
     subscriptionRepository;
     tenantRepository;
+    logger = new common_1.Logger(SubscriptionsService_1.name);
     constructor(planRepository, subscriptionRepository, tenantRepository) {
         this.planRepository = planRepository;
         this.subscriptionRepository = subscriptionRepository;
@@ -82,7 +84,7 @@ let SubscriptionsService = class SubscriptionsService {
                 await this.planRepository.save(this.planRepository.create(planData));
             }
         }
-        console.log('Successfully synced/updated subscription plans to ETB.');
+        this.logger.log('Synced subscription plans to ETB');
     }
     async findAllPlans() {
         return this.planRepository.find({ where: { isActive: true } });
@@ -151,7 +153,7 @@ let SubscriptionsService = class SubscriptionsService {
                 currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             });
             await this.subscriptionRepository.save(subscription);
-            console.log(`New subscription created for tenant ${tenantId} on plan ${plan.name}`);
+            this.logger.log(`New subscription for tenant ${tenantId} on plan ${plan.name}`);
         }
         return this.findTenantSubscription(tenantId);
     }
@@ -179,7 +181,7 @@ let SubscriptionsService = class SubscriptionsService {
     }
 };
 exports.SubscriptionsService = SubscriptionsService;
-exports.SubscriptionsService = SubscriptionsService = __decorate([
+exports.SubscriptionsService = SubscriptionsService = SubscriptionsService_1 = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(plan_entity_1.Plan)),
     __param(1, (0, typeorm_1.InjectRepository)(subscription_entity_1.Subscription)),

@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WorkflowExecution, ExecutionStatus, WorkflowState } from './workflow-execution.entity';
@@ -11,9 +17,15 @@ import { Task, TaskStatus, TaskType } from '../tasks/task.entity';
 import { Notification, NotificationType } from '../notifications/notification.entity';
 import { User } from '../users/user.entity';
 import { ConditionalLogicService, ConditionalStep } from './conditional-logic.service';
+import { WorkflowAutomationService } from './workflow-automation.service';
+import { EmailService } from '../email/email.service';
+import { evaluateConditions } from './workflow-branching.util';
+import { EntityData } from '../entities/entity-data.entity';
 
 @Injectable()
 export class WorkflowExecutionService {
+  private readonly logger = new Logger(WorkflowExecutionService.name);
+
   constructor(
     @InjectRepository(WorkflowExecution)
     private executionRepo: Repository<WorkflowExecution>,
@@ -34,6 +46,10 @@ export class WorkflowExecutionService {
     @InjectRepository(WorkflowTransition)
     private workflowTransitionRepo: Repository<WorkflowTransition>,
     private conditionalLogicService: ConditionalLogicService,
+    private workflowAutomationService: WorkflowAutomationService,
+    private emailService: EmailService,
+    @InjectRepository(EntityData)
+    private entityDataRepo: Repository<EntityData>,
   ) {}
 
   /**
@@ -46,6 +62,8 @@ export class WorkflowExecutionService {
     tenantId: string,
     context: {
       entityId?: string;
+      recordId?: string;
+      entityDefinitionId?: string;
       entityType?: string;
       entityData?: Record<string, any>;
       triggerType?: string;
@@ -107,56 +125,165 @@ export class WorkflowExecutionService {
   }
 
   /**
-   * Execute the next step in the workflow
+   * Execute the next linear step (by order) after currentStepOrder.
    */
   private async runNextStep(executionId: string): Promise<void> {
-    const execution = await this.executionRepo.findOne({
+    const execution = await this.loadExecution(executionId);
+    if (!execution?.workflow) return;
+
+    const steps = this.getSortedSteps(execution.workflow);
+    const currentStepOrder = execution.currentStepOrder || 0;
+    const nextStep = steps.find((step) => step.order > currentStepOrder);
+
+    if (!nextStep) {
+      await this.completeExecution(executionId, execution.workflow.name);
+      return;
+    }
+
+    await this.runStepAt(executionId, nextStep);
+  }
+
+  private getSortedSteps(workflow: Workflow): WorkflowStep[] {
+    return [...(workflow.steps || [])].sort((a, b) => a.order - b.order);
+  }
+
+  private async loadExecution(executionId: string): Promise<WorkflowExecution | null> {
+    return this.executionRepo.findOne({
       where: { id: executionId },
       relations: ['workflow', 'workflow.steps'],
     });
+  }
 
-    if (!execution || !execution.workflow) {
-      console.error(`Execution ${executionId} not found or has no workflow`);
-      return;
-    }
-
-    const steps = execution.workflow.steps.sort((a, b) => a.order - b.order);
-    const currentStepOrder = execution.currentStepOrder || 0;
-    const nextStep = steps.find(step => step.order > currentStepOrder);
-
-    if (!nextStep) {
-      // No more steps - complete the workflow
-      await this.executionRepo.update(executionId, {
-        status: ExecutionStatus.COMPLETED,
-        completedAt: new Date(),
-      });
-      console.log(`✅ Workflow ${execution.workflow.name} completed!`);
-      return;
-    }
-
-    // Update current step order
+  private async completeExecution(
+    executionId: string,
+    workflowName?: string,
+  ): Promise<void> {
     await this.executionRepo.update(executionId, {
-      currentStepOrder: nextStep.order,
+      status: ExecutionStatus.COMPLETED,
+      completedAt: new Date(),
+    });
+    this.logger.log(`Workflow ${workflowName || executionId} completed`);
+  }
+
+  private async runStepAt(
+    executionId: string,
+    step: WorkflowStep,
+  ): Promise<void> {
+    await this.executionRepo.update(executionId, {
+      currentStepOrder: step.order,
     });
 
-    // Execute the step based on its type
-    switch (nextStep.type) {
+    const execution = await this.loadExecution(executionId);
+    if (!execution) return;
+
+    await this.executeStepOfType(executionId, step, execution);
+  }
+
+  private async gotoStepById(
+    executionId: string,
+    stepId: string,
+  ): Promise<void> {
+    const execution = await this.loadExecution(executionId);
+    if (!execution?.workflow) return;
+
+    const target = execution.workflow.steps?.find((s) => s.id === stepId);
+    if (!target) {
+      this.logger.warn(`Branch target step ${stepId} not found — completing workflow`);
+      await this.completeExecution(executionId, execution.workflow.name);
+      return;
+    }
+
+    this.logger.log(`Branching to step "${target.name}" (${target.id})`);
+    await this.runStepAt(executionId, target);
+  }
+
+  /**
+   * After a step finishes, follow explicit nextStepId or the next step in order.
+   */
+  private async proceedAfterStep(
+    executionId: string,
+    completedStep: WorkflowStep,
+  ): Promise<void> {
+    const explicitNext = completedStep.config?.nextStepId as string | undefined;
+    if (explicitNext) {
+      await this.gotoStepById(executionId, explicitNext);
+      return;
+    }
+    await this.runNextStep(executionId);
+  }
+
+  private async executeStepOfType(
+    executionId: string,
+    step: WorkflowStep,
+    execution: WorkflowExecution,
+  ): Promise<void> {
+    switch (step.type) {
       case StepType.AUTOMATION:
-        await this.executeAutomationStep(executionId, nextStep, execution);
+        await this.executeAutomationStep(executionId, step, execution);
         break;
       case StepType.TASK:
-        await this.executeTaskStep(executionId, nextStep, execution);
+        await this.executeTaskStep(executionId, step, execution);
         break;
       case StepType.APPROVAL:
-        await this.executeApprovalStep(executionId, nextStep, execution);
+        await this.executeApprovalStep(executionId, step, execution);
         break;
+      case StepType.CONDITION:
       case 'conditional':
-        await this.executeConditionStep(executionId, nextStep, execution);
+        await this.executeConditionStep(executionId, step, execution);
+        break;
+      case StepType.NOTIFICATION:
+        await this.executeNotificationStep(executionId, step, execution);
         break;
       default:
-        console.warn(`Unknown step type: ${nextStep.type}`);
-        await this.runNextStep(executionId); // Skip to next step
+        this.logger.warn(`Unknown step type: ${step.type} — skipping`);
+        await this.runNextStep(executionId);
     }
+  }
+
+  private async routeAfterRejection(
+    executionId: string,
+    step: WorkflowStep,
+    userId: string,
+    notes?: string,
+  ): Promise<void> {
+    const rejectStepId = step.config?.onRejectStepId as string | undefined;
+    const rejectAction = step.config?.onRejectAction || 'cancel';
+
+    await this.logEvent(
+      executionId,
+      (await this.loadExecution(executionId))!.tenantId,
+      EventType.REJECTED,
+      userId,
+      { rejectionReason: notes },
+      { stepId: step.id, stepName: step.name, notes },
+    );
+
+    if (rejectStepId && rejectAction === 'goto') {
+      await this.executionRepo.update(executionId, {
+        status: ExecutionStatus.RUNNING,
+      });
+      this.logger.log(`Rejection routed to step ${rejectStepId}`);
+      await this.gotoStepById(executionId, rejectStepId);
+      return;
+    }
+
+    const execution = await this.loadExecution(executionId);
+    if (!execution) return;
+
+    const rejectionState =
+      step.config?.rejectionState || WorkflowState.REJECTED;
+    await this.transitionState(
+      execution,
+      rejectionState as WorkflowState,
+      userId,
+      notes || 'Approval rejected',
+    );
+
+    await this.executionRepo.update(executionId, {
+      status: ExecutionStatus.REJECTED,
+      completedAt: new Date(),
+    });
+    this.logger.log(`Workflow rejected at step "${step.name}"`);
   }
 
   /**
@@ -167,7 +294,7 @@ export class WorkflowExecutionService {
     step: WorkflowStep,
     execution: WorkflowExecution,
   ): Promise<void> {
-    console.log(`Executing step ${step.order}: ${step.name} (type: ${step.type})`);
+    this.logger.log(`Executing step ${step.order}: ${step.name} (type: ${step.type})`);
 
     switch (step.type) {
       case StepType.AUTOMATION:
@@ -203,50 +330,40 @@ export class WorkflowExecutionService {
     step: WorkflowStep,
     execution: WorkflowExecution,
   ): Promise<void> {
-    const actions = step.config?.actions || [];
-    const results: any[] = [];
+    this.logger.log(
+      `Running automation step "${step.name}" (execution ${executionId})`,
+    );
 
-    // If no actions configured, just log and continue
-    if (actions.length === 0) {
-      console.log(`Automation step "${step.name}" — no actions configured, marking as completed`);
-      await this.recordStepResult(executionId, step, 'completed', { actions: [], note: 'No actions configured' });
-      await this.runNextStep(executionId);
-      return;
-    }
+    const results = await this.workflowAutomationService.runAutomationStep(
+      step,
+      execution,
+    );
 
-    for (const action of actions) {
-      switch (action.type) {
-        case 'update_field':
-          results.push({ action: 'update_field', status: 'executed', config: action.config });
-          console.log(`Auto-updating field: ${JSON.stringify(action.config)}`);
-          break;
-        case 'create_entity':
-          results.push({ action: 'create_entity', status: 'executed', config: action.config });
-          console.log(`Auto-creating entity record: ${JSON.stringify(action.config)}`);
-          break;
-        case 'update_entity':
-          results.push({ action: 'update_entity', status: 'executed', config: action.config });
-          console.log(`Auto-updating entity: ${JSON.stringify(action.config)}`);
-          break;
-        case 'send_notification':
-          // Create a notification as part of automation
-          await this.createNotification(
-            execution.tenantId,
-            step.config?.assignToUsers?.[0] || execution.triggeredById,
-            `Workflow: ${execution.workflow?.name || 'Automation'}`,
-            `Step "${step.name}" executed automatically`,
-            execution.context?.entityId,
-            executionId,
-          );
-          results.push({ action: 'send_notification', status: 'sent' });
-          break;
-        default:
-          results.push({ action: action.type, status: 'skipped', reason: 'Unknown action' });
-      }
-    }
+    this.logger.log(
+      `Automation results: ${JSON.stringify(results.map((r) => ({ type: r.type, status: r.status, detail: r.detail })))}`,
+    );
 
-    await this.recordStepResult(executionId, step, 'completed', { actions: results });
-    await this.runNextStep(executionId);
+    await this.logEvent(
+      executionId,
+      execution.tenantId,
+      EventType.STEP_EXECUTED,
+      execution.triggeredById,
+      { automationResults: results },
+      {
+        stepId: step.id,
+        stepName: step.name,
+        fromState: execution.currentState,
+        toState: execution.currentState,
+        notes: `Automation: ${results.map((r) => r.type).join(', ')}`,
+      },
+    );
+
+    const failed = results.some((r) => r.status === 'failed');
+    await this.recordStepResult(executionId, step, failed ? 'failed' : 'completed', {
+      actions: results,
+    });
+
+    await this.proceedAfterStep(executionId, step);
   }
 
   /**
@@ -277,12 +394,19 @@ export class WorkflowExecutionService {
         );
       }
 
-      // Send email
       if (notificationType === 'email' || notificationType === 'both') {
         const user = await this.userRepo.findOne({ where: { id: userId } });
         if (user?.email) {
-          console.log(`📧 Email sent to ${user.email}: ${step.name} — ${step.description}`);
-          emailSent = true;
+          const subject = step.name || 'Workflow Notification';
+          const text =
+            step.description ||
+            `Notification from workflow for ${entityName}`;
+          const result = await this.emailService.send({
+            to: user.email,
+            subject,
+            text,
+          });
+          if (result.sent) emailSent = true;
         }
       }
     }
@@ -292,7 +416,23 @@ export class WorkflowExecutionService {
       recipients: targetUserIds.length,
       emailSent 
     });
-    await this.runNextStep(executionId);
+    await this.proceedAfterStep(executionId, step);
+  }
+
+  private buildTaskEntityMetadata(execution: WorkflowExecution) {
+    const ctx = execution.context || {};
+    const recordId =
+      (ctx.recordId as string | undefined) ||
+      (ctx.entityId as string | undefined);
+
+    return {
+      entityName: ctx.entityType as string | undefined,
+      entitySlug: ctx.entityType as string | undefined,
+      recordId,
+      entityId: recordId,
+      entityDefinitionId: ctx.entityDefinitionId as string | undefined,
+      entityData: ctx.entityData as Record<string, unknown> | undefined,
+    };
   }
 
   /**
@@ -322,8 +462,7 @@ export class WorkflowExecutionService {
       step: { id: step.id },
       dueDate: new Date(Date.now() + dueHours * 60 * 60 * 1000),
       metadata: {
-        entityName: execution.context?.entityType,
-        entityId: execution.context?.entityId,
+        ...this.buildTaskEntityMetadata(execution),
         actionRequired: step.description,
         priority: 'medium',
         assignmentType: roleId ? 'role_based' : userId ? 'user_direct' : 'creator_fallback',
@@ -346,7 +485,7 @@ export class WorkflowExecutionService {
       ],
     });
 
-    console.log(`📋 Task created: ${task.id} assigned to role ${roleId || 'N/A'}. Execution paused.`);
+    this.logger.log(`Task created: ${task.id} assigned to role ${roleId || 'N/A'}. Execution paused.`);
   }
 
   /**
@@ -376,8 +515,7 @@ export class WorkflowExecutionService {
       step: { id: step.id },
       dueDate: new Date(Date.now() + timeLimitHours * 60 * 60 * 1000),
       metadata: {
-        entityName: execution.context?.entityType,
-        entityId: execution.context?.entityId,
+        ...this.buildTaskEntityMetadata(execution),
         actionRequired: 'Approve or reject this step',
         priority: 'high',
         assignmentType: roleId ? 'role_based' : userId ? 'user_direct' : 'creator_fallback',
@@ -400,74 +538,66 @@ export class WorkflowExecutionService {
       ],
     });
 
-    console.log(`✅ Approval task created: ${task.id} assigned to role ${roleId || 'N/A'}. Execution paused.`);
+    this.logger.log(`Approval task created: ${task.id} assigned to role ${roleId || 'N/A'}. Execution paused.`);
   }
 
   /**
-   * CONDITION step — check conditions and continue or skip
+   * CONDITION step — branch to onTrueStepId / onFalseStepId or follow default path
    */
   private async executeConditionStep(
     executionId: string,
     step: WorkflowStep,
     execution: WorkflowExecution,
   ): Promise<void> {
+    const entityData = (execution.context?.entityData || {}) as Record<
+      string,
+      unknown
+    >;
     const conditions = step.config?.conditions || [];
-    const entityData = execution.context?.entityData || {};
-    let allConditionsMet = true;
+    const matchMode =
+      (step.config?.matchMode as 'all' | 'any' | undefined) || 'all';
+    const conditionsMet = evaluateConditions(
+      entityData,
+      conditions,
+      matchMode,
+    );
 
-    for (const cond of conditions) {
-      const fieldValue = entityData[cond.field];
-      let conditionMet = false;
-
-      switch (cond.operator) {
-        case 'equals':
-          conditionMet = fieldValue == cond.value;
-          break;
-        case 'not_equals':
-          conditionMet = fieldValue != cond.value;
-          break;
-        case 'contains':
-          conditionMet = String(fieldValue).includes(String(cond.value));
-          break;
-        case 'greater_than':
-          conditionMet = Number(fieldValue) > Number(cond.value);
-          break;
-        case 'less_than':
-          conditionMet = Number(fieldValue) < Number(cond.value);
-          break;
-      }
-
-      if (!conditionMet) {
-        allConditionsMet = false;
-        break;
-      }
-    }
+    const onTrueStepId = step.config?.onTrueStepId as string | undefined;
+    const onFalseStepId = step.config?.onFalseStepId as string | undefined;
+    const onFalseAction =
+      (step.config?.onFalseAction as string | undefined) || 'complete';
 
     await this.recordStepResult(executionId, step, 'completed', {
-      allConditionsMet,
+      conditionsMet,
+      matchMode,
       conditionsChecked: conditions.length,
+      branch: conditionsMet ? 'true' : 'false',
     });
 
-    if (allConditionsMet) {
-      console.log(`Condition step passed — continuing workflow`);
-      await this.runNextStep(executionId);
-    } else {
-      console.log(`Condition step failed — skipping remaining steps`);
-      await this.executionRepo.update(executionId, {
-        status: ExecutionStatus.COMPLETED,
-        completedAt: new Date(),
-        stepResults: [
-          ...(execution.stepResults || []),
-          {
-            stepId: step.id,
-            stepName: step.name,
-            status: 'condition_not_met',
-            result: { allConditionsMet: false },
-            completedAt: new Date(),
-          },
-        ],
-      });
+    this.logger.log(
+      `Condition "${step.name}": ${conditionsMet ? 'TRUE' : 'FALSE'} (${matchMode}, ${conditions.length} rule(s))`,
+    );
+
+    if (conditionsMet) {
+      if (onTrueStepId) {
+        await this.gotoStepById(executionId, onTrueStepId);
+      } else {
+        await this.proceedAfterStep(executionId, step);
+      }
+      return;
     }
+
+    if (onFalseStepId) {
+      await this.gotoStepById(executionId, onFalseStepId);
+      return;
+    }
+
+    if (onFalseAction === 'next') {
+      await this.proceedAfterStep(executionId, step);
+      return;
+    }
+
+    await this.completeExecution(executionId, execution.workflow?.name);
   }
 
   /**
@@ -493,21 +623,22 @@ export class WorkflowExecutionService {
 
     // For approval tasks, check if rejected
     if (task.type === TaskType.APPROVAL && result.approved === false) {
-      await this.executionRepo.update(execution.id, {
-        status: ExecutionStatus.CANCELLED,
-        completedAt: new Date(),
-        stepResults: [
-          ...(execution.stepResults || []),
-          {
-            stepId: task.stepId,
-            stepName: task.title,
-            status: 'rejected',
-            result: { approved: false, notes: result.notes },
-            completedAt: new Date(),
-          },
-        ],
+      const rejectedStep = await this.stepRepo.findOne({
+        where: { id: task.stepId },
       });
-      console.log(`Approval rejected — workflow ${execution.id} cancelled`);
+      if (rejectedStep) {
+        await this.routeAfterRejection(
+          execution.id,
+          rejectedStep,
+          execution.triggeredById,
+          result.notes,
+        );
+      } else {
+        await this.executionRepo.update(execution.id, {
+          status: ExecutionStatus.CANCELLED,
+          completedAt: new Date(),
+        });
+      }
       return;
     }
 
@@ -529,7 +660,7 @@ export class WorkflowExecutionService {
       ],
     });
 
-    console.log(`🔄 Task ${taskId} completed. Resuming workflow ${execution.id}`);
+    this.logger.log(`Task ${taskId} completed. Resuming workflow ${execution.id}`);
     await this.runNextStep(execution.id);
   }
 
@@ -588,7 +719,7 @@ export class WorkflowExecutionService {
           ],
         });
 
-        console.log(`🔄 State transition: ${execution.currentState} → ${nextTransition.toState.key}`);
+        this.logger.log(`State transition: ${execution.currentState} → ${nextTransition.toState.key}`);
       }
     } catch (error) {
       console.error('Error handling state transition:', error);
@@ -654,14 +785,14 @@ export class WorkflowExecutionService {
         .getOne();
       
       if (usersInRole) {
-        console.log(`Assigned task to role ${roleId} → user ${usersInRole.id}`);
+        this.logger.debug(`Assigned task to role ${roleId} → user ${usersInRole.id}`);
         return usersInRole.id;
       }
-      console.warn(`No active users found in role ${roleId}, falling back`);
+      this.logger.warn(`No active users found in role ${roleId}, falling back`);
     }
 
     // 3. Fallback to creator
-    console.log(`Task assigned to creator ${triggeredById} (no role/user match)`);
+    this.logger.debug(`Task assigned to creator ${triggeredById} (no role/user match)`);
     return triggeredById;
   }
 
@@ -793,7 +924,7 @@ export class WorkflowExecutionService {
       { fromState: oldState, toState: newState, notes }
     );
     
-    console.log(`🔄 State transition: ${oldState} → ${newState} (execution: ${execution.id})`);
+    this.logger.log(`State transition: ${oldState} → ${newState} (execution: ${execution.id})`);
   }
 
   /**
@@ -844,9 +975,19 @@ export class WorkflowExecutionService {
       throw new BadRequestException('Transition not valid from current state');
     }
 
-    // Check role requirement (if any)
     if (transition.requiredRoleId) {
-      // TODO: Check if user has the required role
+      const actor = await this.userRepo.findOne({
+        where: { id: userId, tenantId },
+        relations: ['roles'],
+      });
+      const hasRole = actor?.roles?.some(
+        (r) => r.id === transition.requiredRoleId,
+      );
+      if (!hasRole) {
+        throw new ForbiddenException(
+          'You do not have the required role for this transition',
+        );
+      }
     }
 
     // Transition to the new state
@@ -857,19 +998,152 @@ export class WorkflowExecutionService {
       notes || `Transition: ${transition.name}`
     );
 
-    // Execute transition actions (e.g., create tasks)
-    if (transition.actions) {
-      for (const action of transition.actions) {
-        if (action.type === 'create_task') {
-          // Create task based on action config
-          // TODO: Implement task creation from transition actions
-        }
-      }
+    const freshExecution = await this.executionRepo.findOne({
+      where: { id: executionId },
+      relations: ['workflow'],
+    });
+    if (freshExecution && transition.actions?.length) {
+      await this.executeTransitionActions(
+        executionId,
+        freshExecution,
+        transition.actions,
+        userId,
+      );
     }
 
     const result = await this.executionRepo.findOne({ where: { id: executionId } });
     if (!result) throw new NotFoundException('Execution not found');
     return result;
+  }
+
+  private async executeTransitionActions(
+    executionId: string,
+    execution: WorkflowExecution,
+    actions: NonNullable<WorkflowTransition['actions']>,
+    actorUserId: string,
+  ): Promise<void> {
+    for (const action of actions) {
+      await this.runTransitionAction(executionId, execution, action, actorUserId);
+    }
+  }
+
+  private async runTransitionAction(
+    executionId: string,
+    execution: WorkflowExecution,
+    action: { type?: string; config?: Record<string, any> },
+    actorUserId: string,
+  ): Promise<void> {
+    const config = action.config || {};
+    switch (action.type) {
+      case 'create_task':
+        await this.createTaskFromTransitionConfig(executionId, execution, config);
+        break;
+      case 'send_notification': {
+        const userIds: string[] =
+          config.assignToUsers ||
+          (config.assignToUser ? [config.assignToUser] : [execution.triggeredById]);
+        const title = config.title || 'Workflow notification';
+        const message =
+          config.message ||
+          config.description ||
+          `Update from workflow ${execution.workflow?.name || ''}`;
+        for (const uid of userIds) {
+          if (!uid) continue;
+          await this.createNotification(
+            execution.tenantId,
+            uid,
+            title,
+            message,
+            execution.context?.entityId,
+            executionId,
+          );
+        }
+        break;
+      }
+      case 'update_field': {
+        const updates: Record<string, unknown> = config.updates
+          ? config.updates
+          : config.field != null
+            ? { [config.field]: config.value }
+            : {};
+        if (Object.keys(updates).length === 0) break;
+
+        const context = { ...(execution.context || {}) };
+        context.entityData = { ...(context.entityData || {}), ...updates };
+        await this.executionRepo.update(executionId, { context });
+
+        const recordId =
+          context.recordId || context.entityId || execution.context?.entityId;
+        if (recordId) {
+          const record = await this.entityDataRepo.findOne({
+            where: { id: recordId as string, tenantId: execution.tenantId },
+          });
+          if (record) {
+            record.data = { ...record.data, ...updates };
+            await this.entityDataRepo.save(record);
+          }
+        }
+        break;
+      }
+      default:
+        this.logger.warn(`Unknown transition action type: ${action.type}`);
+    }
+  }
+
+  private async createTaskFromTransitionConfig(
+    executionId: string,
+    execution: WorkflowExecution,
+    config: Record<string, any>,
+  ): Promise<void> {
+    const isApproval = config.taskType === 'approval';
+    const roleId = config.assignToRoles?.[0];
+    const userId = config.assignToUsers?.[0];
+    const timeLimitHours = config.timeLimit || 72;
+    const title =
+      config.title ||
+      (isApproval ? 'Approval Required' : 'Task');
+    const description =
+      config.description || 'Action required from workflow transition';
+
+    const task = this.taskRepo.create({
+      title: isApproval ? `Approval Required: ${title}` : title,
+      description,
+      type: isApproval ? TaskType.APPROVAL : TaskType.TASK,
+      status: TaskStatus.PENDING,
+      assignedToRoleId: roleId,
+      visibleToRoleIds: roleId ? [roleId] : [],
+      assignedToId: userId || undefined,
+      createdBy: { id: execution.triggeredById },
+      tenant: { id: execution.tenantId },
+      execution: { id: executionId },
+      dueDate: new Date(Date.now() + timeLimitHours * 60 * 60 * 1000),
+      metadata: {
+        ...this.buildTaskEntityMetadata(execution),
+        actionRequired: description,
+        priority: config.priority || 'medium',
+        assignmentType: roleId ? 'role_based' : userId ? 'user_direct' : 'creator_fallback',
+        source: 'transition_action',
+      } as any,
+    });
+
+    await this.taskRepo.save(task);
+
+    await this.executionRepo.update(executionId, {
+      status: ExecutionStatus.PAUSED,
+      stepResults: [
+        ...(execution.stepResults || []),
+        {
+          stepId: null,
+          stepName: title,
+          status: isApproval ? 'waiting_for_approval' : 'waiting_for_task',
+          result: { taskId: task.id, assignedToRoleId: roleId, source: 'transition' },
+        },
+      ],
+    });
+
+    this.logger.log(
+      `Transition action created ${isApproval ? 'approval' : 'task'} ${task.id}`,
+    );
   }
 
   /**
@@ -912,43 +1186,33 @@ export class WorkflowExecutionService {
     );
 
     if (decision === 'reject') {
-      // Handle rejection - go to rejection state or stop
-      const rejectionState = step.config?.rejectionState || WorkflowState.REJECTED;
-      await this.transitionState(execution, rejectionState as WorkflowState, userId, notes || 'Approval rejected');
-      
-      // Update execution as rejected
-      execution.status = ExecutionStatus.REJECTED;
-      execution.completedAt = new Date();
-      await this.executionRepo.save(execution);
-      
-      console.log(`❌ Workflow rejected at step "${step.name}"`);
-      return execution;
+      await this.routeAfterRejection(executionId, step, userId, notes);
+      return (await this.loadExecution(executionId))!;
     }
 
-    // Approval - continue workflow
-    // Update step result
     lastStepResult.status = 'approved';
-    lastStepResult.result = { ...lastStepResult.result, approved: true, approvedBy: userId, notes };
-    
-    // Move to next step
-    execution.currentStepOrder += 1;
+    lastStepResult.result = {
+      ...lastStepResult.result,
+      approved: true,
+      approvedBy: userId,
+      notes,
+    };
+
     execution.status = ExecutionStatus.RUNNING;
     await this.executionRepo.save(execution);
 
-    // Log completion
     await this.logEvent(
       executionId,
       execution.tenantId,
       EventType.STEP_EXECUTED,
       userId,
       { result: 'approved' },
-      { stepId: step.id, stepName: step.name }
+      { stepId: step.id, stepName: step.name },
     );
 
-    // Continue execution
-    await this.runNextStep(executionId);
-    
-    return execution;
+    await this.proceedAfterStep(executionId, step);
+
+    return (await this.loadExecution(executionId))!;
   }
 
   /**

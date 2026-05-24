@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
+import { EntitiesModule } from '../entities/entities.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { WorkflowsController } from './workflows.controller';
 import { WorkflowExecutionsController } from './workflow-executions.controller';
@@ -19,18 +20,60 @@ import { Tenant } from '../tenants/tenant.entity';
 import { Employee } from '../hrm/entities/employee.entity';
 import { Department } from '../hrm/entities/department.entity';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
+import { Role } from '../roles/role.entity';
+import { EntityData } from '../entities/entity-data.entity';
+import { WorkflowAutomationService } from './workflow-automation.service';
+import { WorkflowTriggerService } from './workflow-trigger.service';
+import { WorkflowAnalyticsService } from './workflow-analytics.service';
+import { WorkflowDelegationsService } from './workflow-delegations.service';
+import { WorkflowApprovalLimitsService } from './workflow-approval-limits.service';
+import { WorkflowDelegation } from './workflow-delegation.entity';
+import { WorkflowDelegationsController } from './workflow-delegations.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Workflow, WorkflowStep, WorkflowExecution, WorkflowEvent, WorkflowState, WorkflowTransition, DynamicEntity, Task, Notification, User, Tenant, Employee, Department]),
+    TypeOrmModule.forFeature([
+      Workflow,
+      WorkflowStep,
+      WorkflowExecution,
+      WorkflowEvent,
+      WorkflowState,
+      WorkflowTransition,
+      WorkflowDelegation,
+      DynamicEntity,
+      EntityData,
+      Task,
+      Notification,
+      User,
+      Tenant,
+      Employee,
+      Department,
+      Role,
+    ]),
     SubscriptionsModule,
+    forwardRef(() => EntitiesModule),
   ],
-  controllers: [WorkflowsController, WorkflowExecutionsController],
+  controllers: [
+    WorkflowsController,
+    WorkflowExecutionsController,
+    WorkflowDelegationsController,
+  ],
   providers: [
     WorkflowsService,
     WorkflowExecutionService,
     ConditionalLogicService,
+    WorkflowAutomationService,
+    WorkflowTriggerService,
+    WorkflowAnalyticsService,
+    WorkflowDelegationsService,
+    WorkflowApprovalLimitsService,
   ],
-  exports: [WorkflowsService, WorkflowExecutionService],
+  exports: [
+    WorkflowsService,
+    WorkflowExecutionService,
+    WorkflowTriggerService,
+    WorkflowDelegationsService,
+    WorkflowApprovalLimitsService,
+  ],
 })
 export class WorkflowsModule {}

@@ -322,6 +322,48 @@ let AttendanceService = class AttendanceService {
             employeeSummaries
         };
     }
+    async getTeamAttendance(date, tenantId) {
+        return this.getDailyAttendance(date, tenantId);
+    }
+    async listAdjustments(tenantId, status, employeeId) {
+        const where = { tenantId };
+        if (status)
+            where.status = status;
+        if (employeeId)
+            where.employeeId = employeeId;
+        return this.adjustmentRepository.find({
+            where,
+            relations: ['employee', 'attendance'],
+            order: { createdAt: 'DESC' },
+        });
+    }
+    async listAttendanceLogs(tenantId, startDate, endDate, employeeId) {
+        const where = {
+            tenantId,
+            checkTime: (0, typeorm_2.Between)(startDate, endDate),
+        };
+        if (employeeId)
+            where.employeeId = employeeId;
+        return this.attendanceLogRepository.find({
+            where,
+            relations: ['employee'],
+            order: { checkTime: 'DESC' },
+        });
+    }
+    async listPolicies(tenantId) {
+        return this.policyRepository.find({
+            where: { tenantId },
+            order: { createdAt: 'DESC' },
+        });
+    }
+    async createPolicy(tenantId, policyData) {
+        const policy = this.policyRepository.create({
+            ...policyData,
+            tenantId,
+            isActive: policyData.isActive ?? true,
+        });
+        return this.policyRepository.save(policy);
+    }
 };
 exports.AttendanceService = AttendanceService;
 exports.AttendanceService = AttendanceService = __decorate([

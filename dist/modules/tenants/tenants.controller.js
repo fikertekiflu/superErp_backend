@@ -14,10 +14,18 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TenantsController = void 0;
 const common_1 = require("@nestjs/common");
+const platform_express_1 = require("@nestjs/platform-express");
+const multer_1 = require("multer");
 const swagger_1 = require("@nestjs/swagger");
 const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
+const roles_guard_1 = require("../auth/guards/roles.guard");
+const roles_decorator_1 = require("../auth/decorators/roles.decorator");
+const user_entity_1 = require("../users/user.entity");
 const tenants_service_1 = require("./tenants.service");
 const create_tenant_dto_1 = require("./dto/create-tenant.dto");
+const update_tenant_settings_dto_1 = require("./dto/update-tenant-settings.dto");
+const submit_verification_dto_1 = require("./dto/submit-verification.dto");
+const verification_document_types_1 = require("./verification-document.types");
 let TenantsController = class TenantsController {
     tenantsService;
     constructor(tenantsService) {
@@ -26,10 +34,7 @@ let TenantsController = class TenantsController {
     async create(createTenantDto, req) {
         return this.tenantsService.create(createTenantDto, req.user.userId);
     }
-    async findAll(req) {
-        if (req.user.role !== 'super_admin') {
-            throw new Error('Only super admin can view all tenants');
-        }
+    async findAll() {
         return this.tenantsService.findAll();
     }
     async findMyTenant(req) {
@@ -41,28 +46,32 @@ let TenantsController = class TenantsController {
     async findMe(req) {
         return this.tenantsService.findOne(req.user.tenantId);
     }
-    async updateMe(updateData, req) {
-        return this.tenantsService.update(req.user.tenantId, updateData);
+    async updateMe(dto, req) {
+        const tenant = await this.tenantsService.updateMySettings(req.user.tenantId, dto);
+        return tenant;
+    }
+    async submitVerification(files, body, req) {
+        return this.tenantsService.submitVerificationApplication(req.user.tenantId, {
+            legalBusinessName: body.legalBusinessName,
+            tinNumber: body.tinNumber,
+            businessRegistrationNumber: body.businessRegistrationNumber,
+            businessPhone: body.businessPhone,
+            businessAddress: body.businessAddress,
+        }, files);
+    }
+    async getVerificationFile(tenantId, documentId, req, res) {
+        await this.tenantsService.streamVerificationFile(tenantId, documentId, req.user, res);
     }
     async submitDocuments(body, req) {
         return this.tenantsService.submitDocuments(req.user.tenantId, body.documents);
     }
-    async findPending(req) {
-        if (req.user.role !== 'super_admin') {
-            throw new Error('Only super admin can view pending tenants');
-        }
+    async findPending() {
         return this.tenantsService.findPending();
     }
     async approveTenant(id, req) {
-        if (req.user.role !== 'super_admin') {
-            throw new Error('Only super admin can approve tenants');
-        }
         return this.tenantsService.approveTenant(id, req.user.userId);
     }
     async rejectTenant(id, req, body) {
-        if (req.user.role !== 'super_admin') {
-            throw new Error('Only super admin can reject tenants');
-        }
         return this.tenantsService.rejectTenant(id, req.user.userId, body.reason);
     }
 };
@@ -70,8 +79,6 @@ exports.TenantsController = TenantsController;
 __decorate([
     (0, common_1.Post)(),
     (0, swagger_1.ApiOperation)({ summary: 'Create a new tenant (company)' }),
-    (0, swagger_1.ApiResponse)({ status: 201, description: 'Tenant created successfully' }),
-    (0, swagger_1.ApiResponse)({ status: 400, description: 'Bad request' }),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Request)()),
     __metadata("design:type", Function),
@@ -80,17 +87,16 @@ __decorate([
 ], TenantsController.prototype, "create", null);
 __decorate([
     (0, common_1.Get)(),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPER_ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Get all tenants (super admin only)' }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Tenants retrieved successfully' }),
-    __param(0, (0, common_1.Request)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], TenantsController.prototype, "findAll", null);
 __decorate([
     (0, common_1.Get)('my'),
     (0, swagger_1.ApiOperation)({ summary: 'Get current user tenant' }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Tenant retrieved successfully' }),
     __param(0, (0, common_1.Request)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -99,10 +105,6 @@ __decorate([
 __decorate([
     (0, common_1.Post)('onboard'),
     (0, swagger_1.ApiOperation)({ summary: 'Complete tenant onboarding' }),
-    (0, swagger_1.ApiResponse)({
-        status: 200,
-        description: 'Onboarding completed successfully',
-    }),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Request)()),
     __metadata("design:type", Function),
@@ -112,7 +114,6 @@ __decorate([
 __decorate([
     (0, common_1.Get)('me'),
     (0, swagger_1.ApiOperation)({ summary: 'Get current workspace details' }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Tenant retrieved successfully' }),
     __param(0, (0, common_1.Request)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -121,17 +122,42 @@ __decorate([
 __decorate([
     (0, common_1.Patch)('me'),
     (0, swagger_1.ApiOperation)({ summary: 'Update current workspace settings' }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Tenant updated successfully' }),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Request)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:paramtypes", [update_tenant_settings_dto_1.UpdateTenantSettingsDto, Object]),
     __metadata("design:returntype", Promise)
 ], TenantsController.prototype, "updateMe", null);
 __decorate([
+    (0, common_1.Post)('submit-verification'),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FileFieldsInterceptor)(verification_document_types_1.VERIFICATION_FILE_FIELDS.map((f) => ({ name: f.field, maxCount: 1 })), {
+        storage: (0, multer_1.memoryStorage)(),
+        limits: { fileSize: 10 * 1024 * 1024 },
+    })),
+    (0, swagger_1.ApiOperation)({
+        summary: 'Submit verification application with PDF/image uploads',
+    }),
+    __param(0, (0, common_1.UploadedFiles)()),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, submit_verification_dto_1.SubmitVerificationDto, Object]),
+    __metadata("design:returntype", Promise)
+], TenantsController.prototype, "submitVerification", null);
+__decorate([
+    (0, common_1.Get)(':tenantId/verification-files/:documentId'),
+    (0, swagger_1.ApiOperation)({ summary: 'Stream a verification document (PDF/image)' }),
+    __param(0, (0, common_1.Param)('tenantId')),
+    __param(1, (0, common_1.Param)('documentId')),
+    __param(2, (0, common_1.Request)()),
+    __param(3, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, Object, Object]),
+    __metadata("design:returntype", Promise)
+], TenantsController.prototype, "getVerificationFile", null);
+__decorate([
     (0, common_1.Patch)('submit-documents'),
-    (0, swagger_1.ApiOperation)({ summary: 'Submit verification documents' }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Documents submitted for review' }),
+    (0, swagger_1.ApiOperation)({ summary: 'Submit verification documents (legacy URLs)' }),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Request)()),
     __metadata("design:type", Function),
@@ -140,17 +166,18 @@ __decorate([
 ], TenantsController.prototype, "submitDocuments", null);
 __decorate([
     (0, common_1.Get)('pending'),
-    (0, swagger_1.ApiOperation)({ summary: 'Get all pending verification tenants (super admin only)' }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Pending tenants retrieved' }),
-    __param(0, (0, common_1.Request)()),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPER_ADMIN),
+    (0, swagger_1.ApiOperation)({ summary: 'Get pending verification tenants (super admin)' }),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], TenantsController.prototype, "findPending", null);
 __decorate([
     (0, common_1.Patch)(':id/approve'),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPER_ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Approve a tenant (super admin only)' }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Tenant approved' }),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Request)()),
     __metadata("design:type", Function),
@@ -159,8 +186,9 @@ __decorate([
 ], TenantsController.prototype, "approveTenant", null);
 __decorate([
     (0, common_1.Patch)(':id/reject'),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPER_ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Reject a tenant (super admin only)' }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Tenant rejected' }),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Request)()),
     __param(2, (0, common_1.Body)()),

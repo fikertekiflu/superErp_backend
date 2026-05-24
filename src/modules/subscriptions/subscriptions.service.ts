@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  OnModuleInit,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Plan } from './plan.entity';
@@ -7,6 +13,8 @@ import { Tenant } from '../tenants/tenant.entity';
 
 @Injectable()
 export class SubscriptionsService {
+  private readonly logger = new Logger(SubscriptionsService.name);
+
   constructor(
     @InjectRepository(Plan)
     private planRepository: Repository<Plan>,
@@ -75,7 +83,7 @@ export class SubscriptionsService {
         await this.planRepository.save(this.planRepository.create(planData));
       }
     }
-    console.log('Successfully synced/updated subscription plans to ETB.');
+    this.logger.log('Synced subscription plans to ETB');
   }
 
   async findAllPlans() {
@@ -158,7 +166,7 @@ export class SubscriptionsService {
         currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       });
       await this.subscriptionRepository.save(subscription);
-      console.log(`New subscription created for tenant ${tenantId} on plan ${plan.name}`);
+      this.logger.log(`New subscription for tenant ${tenantId} on plan ${plan.name}`);
     }
     return this.findTenantSubscription(tenantId);
   }

@@ -6,6 +6,7 @@ export declare class SubscriptionsService {
     private planRepository;
     private subscriptionRepository;
     private tenantRepository;
+    private readonly logger;
     constructor(planRepository: Repository<Plan>, subscriptionRepository: Repository<Subscription>, tenantRepository: Repository<Tenant>);
     onModuleInit(): Promise<void>;
     private seedDefaultPlans;

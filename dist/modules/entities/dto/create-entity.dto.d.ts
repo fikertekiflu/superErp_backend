@@ -2,6 +2,7 @@ export declare class CreateEntityDto {
     name: string;
     slug: string;
     description?: string;
+    pluralName?: string;
     icon?: string;
     isInMenu?: boolean;
     menuOrder?: number;

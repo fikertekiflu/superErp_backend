@@ -1,18 +1,27 @@
+import type { Response } from 'express';
 import { WorkflowsService } from './workflows.service';
 import { CreateWorkflowDto } from './dto/create-workflow.dto';
 import { UpdateWorkflowDto } from './dto/update-workflow.dto';
+import { DeployWorkflowTemplateDto } from './dto/deploy-workflow-template.dto';
+import { WorkflowAnalyticsService } from './workflow-analytics.service';
 export declare class WorkflowsController {
     private readonly workflowsService;
-    constructor(workflowsService: WorkflowsService);
+    private readonly analyticsService;
+    constructor(workflowsService: WorkflowsService, analyticsService: WorkflowAnalyticsService);
     create(createWorkflowDto: CreateWorkflowDto, req: any): Promise<import("./workflow.entity").Workflow>;
+    deployTemplate(dto: DeployWorkflowTemplateDto, req: any): Promise<import("./workflow.entity").Workflow>;
     findAll(req: any, status?: string): Promise<import("./workflow.entity").Workflow[]>;
     update(id: string, updateWorkflowDto: UpdateWorkflowDto, req: any): Promise<import("./workflow.entity").Workflow>;
-    remove(id: string, req: any): Promise<void>;
+    remove(id: string, req: any): Promise<{
+        deleted: boolean;
+    }>;
     activate(id: string, req: any): Promise<import("./workflow.entity").Workflow>;
     deactivate(id: string, req: any): Promise<import("./workflow.entity").Workflow>;
     duplicate(id: string, req: any): Promise<import("./workflow.entity").Workflow>;
     startWorkflow(id: string, req: any): Promise<import("./workflow.entity").Workflow>;
     getStats(req: any): Promise<any>;
+    getAnalytics(req: any, dateRange?: string, workflowId?: string): Promise<import("./workflow-analytics.service").WorkflowAnalyticsDto>;
+    exportAnalytics(req: any, res: Response, dateRange?: string, workflowId?: string): Promise<void>;
     getWorkflowEntities(id: string, req: any): Promise<any[]>;
     addStep(id: string, stepData: any, req: any): Promise<import("./workflow-step.entity").WorkflowStep>;
     updateStep(stepId: string, stepData: any, req: any): Promise<import("./workflow-step.entity").WorkflowStep>;

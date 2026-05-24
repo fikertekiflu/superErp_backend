@@ -19,7 +19,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { EntitiesService } from './entities.service';
+import { EntitiesService, EntityAuthContext } from './entities.service';
 import { CreateEntityDto } from './dto/create-entity.dto';
 import { UpdateEntityDto } from './dto/update-entity.dto';
 import {
@@ -34,175 +34,143 @@ import {
 export class EntitiesController {
   constructor(private readonly entitiesService: EntitiesService) {}
 
-  // Entity CRUD Operations
+  private authFromRequest(req): EntityAuthContext {
+    return {
+      userId: req.user.userId,
+      tenantId: req.user.tenantId,
+      systemRole: req.user.role,
+    };
+  }
+
   @Post()
   @ApiOperation({ summary: 'Create a new entity' })
   @ApiResponse({ status: 201, description: 'Entity created successfully' })
-  @ApiResponse({ status: 400, description: 'Bad request' })
-  @ApiResponse({ status: 403, description: 'Entity slug already exists' })
   async create(@Body() createEntityDto: CreateEntityDto, @Request() req) {
-    const userId = req.user.userId;
-    const tenantId = req.user.tenantId;
-    return this.entitiesService.create(createEntityDto, userId, tenantId);
+    return this.entitiesService.create(createEntityDto, this.authFromRequest(req));
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all entities for current tenant' })
-  @ApiResponse({ status: 200, description: 'Entities retrieved successfully' })
   async findAll(@Request() req) {
-    const tenantId = req.user.tenantId;
-    return this.entitiesService.findAll(tenantId);
-  }
-
-  @Get(':id')
-  @ApiParam({ name: 'id', description: 'Entity ID' })
-  @ApiOperation({ summary: 'Get entity by ID' })
-  @ApiResponse({ status: 200, description: 'Entity retrieved successfully' })
-  @ApiResponse({ status: 404, description: 'Entity not found' })
-  async findOne(@Param('id') id: string, @Request() req) {
-    const tenantId = req.user.tenantId;
-    return this.entitiesService.findOne(id, tenantId);
+    return this.entitiesService.findAll(this.authFromRequest(req));
   }
 
   @Get('slug/:slug')
   @ApiParam({ name: 'slug', description: 'Entity slug' })
   @ApiOperation({ summary: 'Get entity by slug' })
-  @ApiResponse({ status: 200, description: 'Entity retrieved successfully' })
-  @ApiResponse({ status: 404, description: 'Entity not found' })
   async findBySlug(@Param('slug') slug: string, @Request() req) {
-    const tenantId = req.user.tenantId;
-    return this.entitiesService.findBySlug(slug, tenantId);
+    return this.entitiesService.findBySlug(slug, this.authFromRequest(req));
+  }
+
+  @Get('data/:dataId')
+  @ApiParam({ name: 'dataId', description: 'Data record ID' })
+  @ApiOperation({ summary: 'Get data record by ID' })
+  async findDataById(@Param('dataId') dataId: string, @Request() req) {
+    return this.entitiesService.findDataById(dataId, this.authFromRequest(req));
+  }
+
+  @Patch('data/:dataId')
+  @ApiParam({ name: 'dataId', description: 'Data record ID' })
+  @ApiOperation({ summary: 'Update data record' })
+  async updateData(
+    @Param('dataId') dataId: string,
+    @Body() updateEntityDataDto: UpdateEntityDataDto,
+    @Request() req,
+  ) {
+    return this.entitiesService.updateData(
+      dataId,
+      updateEntityDataDto,
+      this.authFromRequest(req),
+    );
+  }
+
+  @Get(':id')
+  @ApiParam({ name: 'id', description: 'Entity ID' })
+  @ApiOperation({ summary: 'Get entity by ID' })
+  async findOne(@Param('id') id: string, @Request() req) {
+    return this.entitiesService.findOne(id, this.authFromRequest(req));
   }
 
   @Patch(':id')
   @ApiParam({ name: 'id', description: 'Entity ID' })
   @ApiOperation({ summary: 'Update entity' })
-  @ApiResponse({ status: 200, description: 'Entity updated successfully' })
-  @ApiResponse({ status: 404, description: 'Entity not found' })
-  @ApiResponse({ status: 403, description: 'Entity slug already exists' })
   async update(
     @Param('id') id: string,
     @Body() updateEntityDto: UpdateEntityDto,
     @Request() req,
   ) {
-    const userId = req.user.userId;
-    const tenantId = req.user.tenantId;
-    return this.entitiesService.update(id, updateEntityDto, userId, tenantId);
+    return this.entitiesService.update(id, updateEntityDto, this.authFromRequest(req));
   }
 
   @Delete(':id')
   @ApiParam({ name: 'id', description: 'Entity ID' })
   @ApiOperation({ summary: 'Delete entity' })
-  @ApiResponse({ status: 200, description: 'Entity deleted successfully' })
-  @ApiResponse({ status: 404, description: 'Entity not found' })
-  @ApiResponse({ status: 403, description: 'Cannot delete entity with data' })
   async remove(@Param('id') id: string, @Request() req) {
-    const tenantId = req.user.tenantId;
-    return this.entitiesService.remove(id, tenantId);
+    return this.entitiesService.remove(id, this.authFromRequest(req));
   }
 
-  // Entity Data CRUD Operations
   @Post(':id/data')
   @ApiParam({ name: 'id', description: 'Entity ID' })
   @ApiOperation({ summary: 'Create data for entity' })
-  @ApiResponse({ status: 201, description: 'Data created successfully' })
-  @ApiResponse({ status: 404, description: 'Entity not found' })
-  @ApiResponse({ status: 400, description: 'Validation failed' })
   async createData(
     @Param('id') id: string,
     @Body() createEntityDataDto: CreateEntityDataDto,
     @Request() req,
   ) {
-    const userId = req.user.userId;
-    const tenantId = req.user.tenantId;
-
-    // Ensure the entityId matches the param
     createEntityDataDto.entityId = id;
-
     return this.entitiesService.createEntityData(
       createEntityDataDto,
-      userId,
-      tenantId,
+      this.authFromRequest(req),
     );
   }
 
   @Get(':id/data')
   @ApiParam({ name: 'id', description: 'Entity ID' })
   @ApiOperation({ summary: 'Get all data for entity' })
-  @ApiResponse({ status: 200, description: 'Data retrieved successfully' })
-  @ApiResponse({ status: 404, description: 'Entity not found' })
   async findAllData(@Param('id') id: string, @Request() req) {
-    const tenantId = req.user.tenantId;
-    return this.entitiesService.findAllData(id, tenantId);
-  }
-
-  @Get('data/:dataId')
-  @ApiParam({ name: 'dataId', description: 'Data record ID' })
-  @ApiOperation({ summary: 'Get data record by ID' })
-  @ApiResponse({ status: 200, description: 'Data retrieved successfully' })
-  @ApiResponse({ status: 404, description: 'Data not found' })
-  async findDataById(@Param('dataId') dataId: string, @Request() req) {
-    const tenantId = req.user.tenantId;
-    return this.entitiesService.findDataById(dataId, tenantId);
-  }
-
-  @Patch('data/:dataId')
-  @ApiParam({ name: 'dataId', description: 'Data record ID' })
-  @ApiOperation({ summary: 'Update data record' })
-  @ApiResponse({ status: 200, description: 'Data updated successfully' })
-  @ApiResponse({ status: 404, description: 'Data not found' })
-  @ApiResponse({ status: 400, description: 'Validation failed' })
-  async updateData(
-    @Param('dataId') dataId: string,
-    @Body() updateEntityDataDto: UpdateEntityDataDto,
-    @Request() req,
-  ) {
-    const userId = req.user.userId;
-    const tenantId = req.user.tenantId;
-    return this.entitiesService.updateData(
-      dataId,
-      updateEntityDataDto,
-      userId,
-      tenantId,
-    );
+    return this.entitiesService.findAllData(id, this.authFromRequest(req));
   }
 
   @Delete(':id/data/:dataId')
   @ApiParam({ name: 'id', description: 'Entity ID' })
   @ApiParam({ name: 'dataId', description: 'Data ID' })
   @ApiOperation({ summary: 'Delete entity data' })
-  @ApiResponse({ status: 200, description: 'Data deleted successfully' })
-  @ApiResponse({ status: 404, description: 'Entity or data not found' })
   async removeData(
-    @Param('id') id: string,
     @Param('dataId') dataId: string,
     @Request() req,
   ) {
-    const tenantId = req.user.tenantId;
-    return this.entitiesService.removeData(dataId, tenantId);
+    return this.entitiesService.removeData(dataId, this.authFromRequest(req));
   }
 
   @Get(':id/search')
   @ApiParam({ name: 'id', description: 'Entity ID' })
   @ApiOperation({ summary: 'Search entity data with filters' })
-  @ApiResponse({ status: 200, description: 'Search results' })
-  @ApiResponse({ status: 404, description: 'Entity not found' })
   async searchData(
     @Param('id') id: string,
-    @Query() searchQuery: any,
+    @Query('q') query: string,
     @Request() req,
   ) {
-    const tenantId = req.user.tenantId;
-    return this.entitiesService.searchData(id, searchQuery, tenantId);
+    return this.entitiesService.searchData(
+      id,
+      query || '',
+      this.authFromRequest(req),
+    );
   }
 
   @Get(':id/stats')
   @ApiParam({ name: 'id', description: 'Entity ID' })
   @ApiOperation({ summary: 'Get entity statistics and reports' })
-  @ApiResponse({ status: 200, description: 'Entity statistics' })
-  @ApiResponse({ status: 404, description: 'Entity not found' })
   async getStats(@Param('id') id: string, @Request() req) {
-    const tenantId = req.user.tenantId;
-    return this.entitiesService.getEntityStats(id, tenantId);
+    return this.entitiesService.getEntityStats(id, this.authFromRequest(req));
+  }
+
+  @Get(':id/insights')
+  @ApiParam({ name: 'id', description: 'Entity ID' })
+  @ApiOperation({ summary: 'Dynamic dashboard insights for an entity' })
+  async getInsights(@Param('id') id: string, @Request() req) {
+    return this.entitiesService.getEntityInsights(
+      id,
+      this.authFromRequest(req),
+    );
   }
 }

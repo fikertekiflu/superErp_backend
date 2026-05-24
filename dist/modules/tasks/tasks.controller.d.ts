@@ -2,12 +2,16 @@ import { TasksService } from './tasks.service';
 export declare class TasksController {
     private readonly tasksService;
     constructor(tasksService: TasksService);
-    getMyTasks(req: any): Promise<import("./task.entity").Task[]>;
+    getMyTasks(req: any): Promise<(import("./task.entity").Task & {
+        entityPreview?: import("./task-entity-preview.util").TaskEntityPreview | null;
+    })[]>;
     claimTask(id: string, req: any): Promise<import("./task.entity").Task>;
     unclaimTask(id: string, req: any): Promise<import("./task.entity").Task>;
     getAllTasks(req: any): Promise<import("./task.entity").Task[]>;
     getStats(req: any): Promise<any>;
-    getTask(id: string): Promise<import("./task.entity").Task>;
+    getTask(id: string): Promise<import("./task.entity").Task & {
+        entityPreview?: import("./task-entity-preview.util").TaskEntityPreview | null;
+    }>;
     startTask(id: string, req: any): Promise<import("./task.entity").Task>;
     completeTask(id: string, body: {
         approved?: boolean;

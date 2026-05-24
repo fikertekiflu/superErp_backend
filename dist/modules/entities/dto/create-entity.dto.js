@@ -16,6 +16,7 @@ class CreateEntityDto {
     name;
     slug;
     description;
+    pluralName;
     icon;
     isInMenu;
     menuOrder;
@@ -41,6 +42,12 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], CreateEntityDto.prototype, "description", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Leads', required: false }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CreateEntityDto.prototype, "pluralName", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({ example: 'briefcase', required: false }),
     (0, class_validator_1.IsString)(),

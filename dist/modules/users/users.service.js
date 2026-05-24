@@ -68,6 +68,57 @@ let UsersService = class UsersService {
     async update(id, updateData) {
         await this.userRepository.update(id, updateData);
     }
+    async updateProfile(userId, data) {
+        const user = await this.findOne(userId);
+        if (!user)
+            throw new common_1.NotFoundException('User not found');
+        const patch = {};
+        if (data.firstName !== undefined)
+            patch.firstName = data.firstName.trim();
+        if (data.lastName !== undefined)
+            patch.lastName = data.lastName.trim();
+        if (data.phone !== undefined) {
+            patch.phone = data.phone.trim() ? data.phone.trim() : undefined;
+        }
+        await this.userRepository.update(userId, patch);
+        const updated = await this.findOne(userId);
+        if (!updated)
+            throw new common_1.NotFoundException('User not found');
+        return updated;
+    }
+    async changePassword(userId, currentPassword, newPassword) {
+        const user = await this.findOne(userId);
+        if (!user)
+            throw new common_1.NotFoundException('User not found');
+        const valid = await bcrypt.compare(currentPassword, user.password);
+        if (!valid) {
+            throw new common_1.UnauthorizedException('Current password is incorrect');
+        }
+        if (currentPassword === newPassword) {
+            throw new common_1.BadRequestException('New password must be different from current password');
+        }
+        const hashed = await bcrypt.hash(newPassword, 10);
+        await this.userRepository.update(userId, { password: hashed });
+    }
+    sanitizeUser(user) {
+        const { password: _pw, ...safe } = user;
+        return safe;
+    }
+    async updateUserApprovalLimit(userId, tenantId, approvalLimitOverride) {
+        const user = await this.userRepository.findOne({
+            where: { id: userId, tenantId },
+            relations: ['roles'],
+        });
+        if (!user)
+            throw new common_1.NotFoundException('User not found');
+        await this.userRepository.update(userId, {
+            approvalLimitOverride: approvalLimitOverride === undefined ? null : approvalLimitOverride,
+        });
+        return this.userRepository.findOne({
+            where: { id: userId },
+            relations: ['roles'],
+        });
+    }
     async getTenantRoles(tenantId) {
         return this.roleRepository.find({
             where: { tenant: { id: tenantId }, isActive: true },
@@ -76,7 +127,9 @@ let UsersService = class UsersService {
     }
     async createTenantRole(tenantId, data) {
         const role = this.roleRepository.create({
-            ...data,
+            name: data.name,
+            description: data.description,
+            entityPermissions: data.entityPermissions || [],
             tenant: { id: tenantId },
             isActive: true,
         });

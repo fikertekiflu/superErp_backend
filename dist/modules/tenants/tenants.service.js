@@ -11,22 +11,39 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var TenantsService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TenantsService = void 0;
 const common_1 = require("@nestjs/common");
+const tenant_verification_storage_service_1 = require("./tenant-verification-storage.service");
 const typeorm_1 = require("@nestjs/typeorm");
 const typeorm_2 = require("typeorm");
 const tenant_entity_1 = require("./tenant.entity");
 const entities_service_1 = require("../entities/entities.service");
 const workflows_service_1 = require("../workflows/workflows.service");
-let TenantsService = class TenantsService {
+const user_entity_1 = require("../users/user.entity");
+const audit_logs_service_1 = require("../audit-logs/audit-logs.service");
+const audit_log_entity_1 = require("../audit-logs/audit-log.entity");
+let TenantsService = TenantsService_1 = class TenantsService {
     tenantsRepository;
     entitiesService;
     workflowsService;
-    constructor(tenantsRepository, entitiesService, workflowsService) {
+    auditLogsService;
+    verificationStorage;
+    logger = new common_1.Logger(TenantsService_1.name);
+    constructor(tenantsRepository, entitiesService, workflowsService, auditLogsService, verificationStorage) {
         this.tenantsRepository = tenantsRepository;
         this.entitiesService = entitiesService;
         this.workflowsService = workflowsService;
+        this.auditLogsService = auditLogsService;
+        this.verificationStorage = verificationStorage;
+    }
+    entityAuth(userId, tenantId) {
+        return {
+            userId,
+            tenantId,
+            systemRole: user_entity_1.UserRole.TENANT_ADMIN,
+        };
     }
     async create(createTenantDto, userId) {
         const existingTenantByDomain = await this.tenantsRepository.findOne({
@@ -69,12 +86,61 @@ let TenantsService = class TenantsService {
         }
         return tenant;
     }
+    async updateMySettings(tenantId, dto) {
+        const tenant = await this.findOne(tenantId);
+        if (!tenant) {
+            throw new common_1.NotFoundException('Tenant not found');
+        }
+        if (dto.name?.trim()) {
+            const nameTaken = await this.tenantsRepository.findOne({
+                where: { name: dto.name.trim() },
+            });
+            if (nameTaken && nameTaken.id !== tenantId) {
+                throw new common_1.ConflictException('Workspace name is already in use');
+            }
+        }
+        const settings = {
+            ...(tenant.settings || {}),
+            ...(dto.industry !== undefined ? { industry: dto.industry } : {}),
+            ...(dto.companySize !== undefined ? { companySize: dto.companySize } : {}),
+            ...(dto.regional
+                ? {
+                    regional: {
+                        ...(tenant.settings?.regional || {}),
+                        ...dto.regional,
+                    },
+                }
+                : {}),
+            ...(dto.notifications
+                ? {
+                    notifications: {
+                        ...(tenant.settings?.notifications || {}),
+                        ...dto.notifications,
+                    },
+                }
+                : {}),
+        };
+        const patch = { settings };
+        if (dto.name?.trim())
+            patch.name = dto.name.trim();
+        if (dto.description !== undefined)
+            patch.description = dto.description;
+        return this.update(tenantId, patch);
+    }
     async completeOnboarding(tenantId, userId, setupData) {
+        const existing = await this.findOne(tenantId);
+        const templateId = setupData.settings?.templateId;
         const tenant = await this.update(tenantId, {
             isOnboarded: true,
             status: tenant_entity_1.TenantStatus.PENDING_VERIFICATION,
+            settings: {
+                ...(existing?.settings || {}),
+                industry: setupData.industry,
+                companySize: setupData.companySize,
+                templateId,
+                blueprintId: templateId,
+            },
         });
-        const templateId = setupData.settings?.templateId;
         if (templateId) {
             await this.seedBlueprint(tenantId, userId, templateId);
         }
@@ -83,8 +149,8 @@ let TenantsService = class TenantsService {
     async submitDocuments(tenantId, documents) {
         const tenant = await this.findOne(tenantId);
         if (!tenant)
-            throw new Error('Tenant not found');
-        const docsWithTimestamp = documents.map(doc => ({
+            throw new common_1.NotFoundException('Tenant not found');
+        const docsWithTimestamp = documents.map((doc) => ({
             ...doc,
             uploadedAt: new Date().toISOString(),
         }));
@@ -94,6 +160,53 @@ let TenantsService = class TenantsService {
             status: tenant_entity_1.TenantStatus.PENDING_VERIFICATION,
             rejectionReason: null,
         });
+    }
+    async submitVerificationApplication(tenantId, profile, files) {
+        const tenant = await this.findOne(tenantId);
+        if (!tenant)
+            throw new common_1.NotFoundException('Tenant not found');
+        if (!profile.tinNumber?.trim()) {
+            throw new common_1.BadRequestException('TIN number is required');
+        }
+        if (!profile.legalBusinessName?.trim()) {
+            throw new common_1.BadRequestException('Legal business name is required');
+        }
+        const documents = this.verificationStorage.collectUploadedFiles(tenantId, files);
+        const verificationProfile = {
+            ...profile,
+            submittedAt: new Date().toISOString(),
+        };
+        return this.update(tenantId, {
+            verificationDocuments: documents,
+            verificationStatus: 'submitted',
+            status: tenant_entity_1.TenantStatus.PENDING_VERIFICATION,
+            rejectionReason: null,
+            settings: {
+                ...(tenant.settings || {}),
+                verificationProfile,
+            },
+        });
+    }
+    async streamVerificationFile(tenantId, documentId, actor, res) {
+        const tenant = await this.findOne(tenantId);
+        if (!tenant)
+            throw new common_1.NotFoundException('Tenant not found');
+        this.verificationStorage.assertCanAccess(actor, tenantId);
+        const doc = (tenant.verificationDocuments || []).find((d) => d.id === documentId);
+        if (!doc)
+            throw new common_1.NotFoundException('Document not found');
+        if (doc.storagePath && doc.mimeType && doc.fileName) {
+            this.verificationStorage.streamDocument(doc.storagePath, doc.mimeType, doc.fileName, res);
+            return;
+        }
+        if (doc.fileUrl) {
+            res.redirect(doc.fileUrl);
+            return;
+        }
+        throw new common_1.NotFoundException('Document file is not available');
+    }
+    getVerificationProfile(tenant) {
+        return tenant.settings?.verificationProfile ?? null;
     }
     async findPending() {
         return this.tenantsRepository.find({
@@ -105,24 +218,43 @@ let TenantsService = class TenantsService {
         });
     }
     async approveTenant(tenantId, adminUserId) {
-        return this.update(tenantId, {
+        const tenant = await this.update(tenantId, {
             status: tenant_entity_1.TenantStatus.ACTIVE,
             verificationStatus: 'approved',
             verifiedAt: new Date(),
             verifiedBy: adminUserId,
             rejectionReason: null,
         });
+        await this.auditLogsService.log({
+            tenantId,
+            actorId: adminUserId,
+            action: audit_log_entity_1.AuditAction.TENANT_APPROVED,
+            resourceType: 'tenant',
+            resourceId: tenantId,
+            resourceName: tenant.name,
+        });
+        return tenant;
     }
     async rejectTenant(tenantId, adminUserId, reason) {
-        return this.update(tenantId, {
+        const tenant = await this.update(tenantId, {
             status: tenant_entity_1.TenantStatus.REJECTED,
             verificationStatus: 'rejected',
             rejectionReason: reason,
             verifiedBy: adminUserId,
         });
+        await this.auditLogsService.log({
+            tenantId,
+            actorId: adminUserId,
+            action: audit_log_entity_1.AuditAction.TENANT_REJECTED,
+            resourceType: 'tenant',
+            resourceId: tenantId,
+            resourceName: tenant.name,
+            metadata: { reason },
+        });
+        return tenant;
     }
     async seedBlueprint(tenantId, userId, templateId) {
-        console.log(`Seeding blueprint ${templateId} for tenant ${tenantId}`);
+        this.logger.log(`Seeding blueprint ${templateId} for tenant ${tenantId}`);
         try {
             if (templateId === 'crm') {
                 const leads = await this.entitiesService.create({
@@ -168,7 +300,7 @@ let TenantsService = class TenantsService {
                             display: { order: 4, showInList: true, showInForm: true },
                         },
                     ],
-                }, userId, tenantId);
+                }, this.entityAuth(userId, tenantId));
                 const deals = await this.entitiesService.create({
                     name: 'Deals',
                     slug: 'deals',
@@ -210,7 +342,7 @@ let TenantsService = class TenantsService {
                             display: { order: 3, showInList: true, showInForm: true },
                         },
                     ],
-                }, userId, tenantId);
+                }, this.entityAuth(userId, tenantId));
                 await this.workflowsService.create({
                     name: 'Sales Master Pipeline',
                     description: 'Automated sales tracking from lead to closed deal',
@@ -281,7 +413,7 @@ let TenantsService = class TenantsService {
                             display: { order: 4, showInList: true, showInForm: true },
                         },
                     ],
-                }, userId, tenantId);
+                }, this.entityAuth(userId, tenantId));
                 const suppliers = await this.entitiesService.create({
                     name: 'Suppliers',
                     slug: 'suppliers',
@@ -307,7 +439,7 @@ let TenantsService = class TenantsService {
                             display: { order: 2, showInList: true, showInForm: true },
                         },
                     ],
-                }, userId, tenantId);
+                }, this.entityAuth(userId, tenantId));
                 await this.workflowsService.create({
                     name: 'Supply Chain Flow',
                     description: 'Automated restock alerts and supplier management',
@@ -361,7 +493,7 @@ let TenantsService = class TenantsService {
                             display: { order: 2, showInList: true, showInForm: true },
                         },
                     ],
-                }, userId, tenantId);
+                }, this.entityAuth(userId, tenantId));
                 const products = await this.entitiesService.create({
                     name: 'Products',
                     slug: 'products',
@@ -387,7 +519,7 @@ let TenantsService = class TenantsService {
                             display: { order: 2, showInList: true, showInForm: true },
                         },
                     ],
-                }, userId, tenantId);
+                }, this.entityAuth(userId, tenantId));
                 await this.workflowsService.create({
                     name: 'General Operations',
                     description: 'Standard business operational workflow',
@@ -422,11 +554,13 @@ let TenantsService = class TenantsService {
     }
 };
 exports.TenantsService = TenantsService;
-exports.TenantsService = TenantsService = __decorate([
+exports.TenantsService = TenantsService = TenantsService_1 = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(tenant_entity_1.Tenant)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
         entities_service_1.EntitiesService,
-        workflows_service_1.WorkflowsService])
+        workflows_service_1.WorkflowsService,
+        audit_logs_service_1.AuditLogsService,
+        tenant_verification_storage_service_1.TenantVerificationStorageService])
 ], TenantsService);
 //# sourceMappingURL=tenants.service.js.map

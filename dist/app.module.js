@@ -28,12 +28,18 @@ const tasks_module_1 = require("./modules/tasks/tasks.module");
 const notifications_module_1 = require("./modules/notifications/notifications.module");
 const attendance_module_1 = require("./modules/attendance/attendance.module");
 const accounting_module_1 = require("./modules/accounting/accounting.module");
+const common_module_1 = require("./common/common.module");
+const audit_logs_module_1 = require("./modules/audit-logs/audit-logs.module");
+const workflow_catalog_module_1 = require("./modules/workflow-catalog/workflow-catalog.module");
+const email_module_1 = require("./modules/email/email.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
+            common_module_1.CommonModule,
+            email_module_1.EmailModule,
             config_1.ConfigModule.forRoot({
                 isGlobal: true,
                 envFilePath: '.env',
@@ -55,6 +61,8 @@ exports.AppModule = AppModule = __decorate([
             notifications_module_1.NotificationsModule,
             attendance_module_1.AttendanceModule,
             accounting_module_1.AccountingModule,
+            audit_logs_module_1.AuditLogsModule,
+            workflow_catalog_module_1.WorkflowCatalogModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService, database_test_service_1.DatabaseTestService],

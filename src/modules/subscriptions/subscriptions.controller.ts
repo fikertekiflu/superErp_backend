@@ -7,6 +7,7 @@ import {
   Request,
   Param,
   Patch,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -25,6 +26,8 @@ import { ChapaService } from './chapa.service';
 @Controller('subscriptions')
 @ApiBearerAuth()
 export class SubscriptionsController {
+  private readonly logger = new Logger(SubscriptionsController.name);
+
   constructor(
     private readonly subscriptionsService: SubscriptionsService,
     private readonly chapaService: ChapaService,
@@ -105,8 +108,8 @@ export class SubscriptionsController {
       callback_url: `${process.env.BACKEND_URL || 'http://localhost:3000'}/subscriptions/webhook/chapa`,
     };
 
-    console.log('Sending to Chapa:', JSON.stringify(payload, null, 2));
-    
+    this.logger.debug(`Chapa initialize tx_ref=${tx_ref}`);
+
     return this.chapaService.initializeTransaction(payload);
   }
 
@@ -122,23 +125,21 @@ export class SubscriptionsController {
       const parts = tx_ref.split('-');
       const planPart = parts[2]; 
       
-      console.log('Verifying payment for tx_ref:', tx_ref);
-      console.log('Extracted Plan Part:', planPart);
-      
-      // 2. Find the full plan by matching the first part of the ID
+      this.logger.log(`Verifying payment tx_ref=${tx_ref} planPart=${planPart}`);
+
       const allPlans = await this.subscriptionsService.findAllPlans();
       const plan = allPlans.find(p => p.id.startsWith(planPart));
-      
+
       if (plan) {
-        console.log('Found matching plan:', plan.name, 'with ID:', plan.id);
         await this.subscriptionsService.upgradePlan(tenantId, plan.id);
-        console.log('Successfully upgraded tenant:', tenantId, 'to plan:', plan.name);
+        this.logger.log(`Tenant ${tenantId} upgraded to plan ${plan.name}`);
         return { status: 'success', message: 'Payment verified and plan upgraded' };
-      } else {
-        console.log('CRITICAL: No plan found starting with:', planPart);
-        console.log('Available plan IDs:', allPlans.map(p => p.id));
-        return { status: 'failed', message: 'Plan matching failed' };
       }
+
+      this.logger.warn(
+        `No plan matched planPart=${planPart}; available=${allPlans.map(p => p.id).join(', ')}`,
+      );
+      return { status: 'failed', message: 'Plan matching failed' };
     }
     
     return { status: 'failed', message: 'Payment verification failed' };

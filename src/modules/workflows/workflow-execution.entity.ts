@@ -85,6 +85,8 @@ export class WorkflowExecution {
   @Column({ type: 'jsonb', nullable: true })
   context: {
     entityId?: string;
+    recordId?: string;
+    entityDefinitionId?: string;
     entityType?: string;
     entityData?: Record<string, any>;
     triggerType?: string;

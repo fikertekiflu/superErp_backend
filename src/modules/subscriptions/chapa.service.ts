@@ -1,9 +1,14 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 
 @Injectable()
 export class ChapaService {
+  private readonly logger = new Logger(ChapaService.name);
   private readonly secretKey: string;
   private readonly baseUrl = 'https://api.chapa.co/v1';
 
@@ -23,7 +28,7 @@ export class ChapaService {
     return_url?: string;
   }) {
     try {
-      console.log('CHAPA INITIALIZE PAYLOAD:', JSON.stringify(data, null, 2));
+      this.logger.debug(`Chapa initialize tx_ref=${data.tx_ref}`);
       const response = await axios.post(
         `${this.baseUrl}/transaction/initialize`,
         {

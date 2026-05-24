@@ -11,6 +11,14 @@ import {
 import { Tenant } from '../tenants/tenant.entity';
 import { User } from '../users/user.entity';
 
+export interface RoleEntityPermission {
+  entityId: string;
+  canCreate: boolean;
+  canRead: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+}
+
 @Entity('roles')
 export class Role {
   @PrimaryGeneratedColumn('uuid')
@@ -24,6 +32,13 @@ export class Role {
 
   @Column({ default: true })
   isActive: boolean;
+
+  @Column({ type: 'jsonb', default: [] })
+  entityPermissions: RoleEntityPermission[];
+
+  /** Max amount this role may approve (null = unlimited) */
+  @Column({ type: 'decimal', precision: 14, scale: 2, nullable: true })
+  maxApprovalAmount?: number | null;
 
   @ManyToOne(() => Tenant, { nullable: true })
   tenant?: Tenant;

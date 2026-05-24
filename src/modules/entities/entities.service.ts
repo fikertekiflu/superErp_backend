@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ModuleRef } from '@nestjs/core';
 import { Entity, EntityStatus } from './entity.entity';
 import { EntityData } from './entity-data.entity';
 import { CreateEntityDto } from './dto/create-entity.dto';
@@ -16,8 +15,16 @@ import {
   UpdateEntityDataDto,
 } from './dto/create-entity-data.dto';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
-import { Workflow } from '../workflows/workflow.entity';
-import { WorkflowExecutionService } from '../workflows/workflow-execution.service';
+import { WorkflowTriggerService } from '../workflows/workflow-trigger.service';
+import { PermissionsService } from '../../common/permissions/permissions.service';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import { AuditAction } from '../audit-logs/audit-log.entity';
+
+export interface EntityAuthContext {
+  userId: string;
+  tenantId?: string;
+  systemRole: string;
+}
 
 @Injectable()
 export class EntitiesService {
@@ -26,18 +33,23 @@ export class EntitiesService {
     private entitiesRepository: Repository<Entity>,
     @InjectRepository(EntityData)
     private entityDataRepository: Repository<EntityData>,
-    @InjectRepository(Workflow)
-    private workflowsRepository: Repository<Workflow>,
     private subscriptionsService: SubscriptionsService,
-    private moduleRef: ModuleRef,
+    private workflowTriggerService: WorkflowTriggerService,
+    private permissionsService: PermissionsService,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   // Entity CRUD Operations
   async create(
     createEntityDto: CreateEntityDto,
-    userId: string,
-    tenantId?: string,
+    auth: EntityAuthContext,
   ): Promise<Entity> {
+    const { userId, tenantId, systemRole } = auth;
+    await this.permissionsService.assertCanManageSchemas(
+      userId,
+      tenantId,
+      systemRole,
+    );
     // Check if slug already exists for this tenant
     const existing = await this.entitiesRepository.findOne({
       where: { slug: createEntityDto.slug, tenantId },
@@ -57,23 +69,54 @@ export class EntitiesService {
       await this.subscriptionsService.checkLimit(tenantId, 'maxEntities', currentCount);
     }
 
+    this.validateEntityFieldDefinitions(createEntityDto.fields);
+
     const entity = this.entitiesRepository.create({
       ...(createEntityDto as any),
       createdById: userId,
       tenantId,
     });
 
-    return this.entitiesRepository.save(entity) as unknown as Promise<Entity>;
+    const saved = (await this.entitiesRepository.save(
+      entity,
+    )) as unknown as Entity;
+
+    await this.auditLogsService.log({
+      tenantId,
+      actorId: userId,
+      action: AuditAction.ENTITY_CREATED,
+      resourceType: 'entity',
+      resourceId: saved.id,
+      resourceName: saved.name,
+    });
+
+    return saved;
   }
 
-  async findAll(tenantId?: string): Promise<Entity[]> {
-    return this.entitiesRepository.find({
+  async findAll(auth: EntityAuthContext): Promise<Entity[]> {
+    const { tenantId, userId, systemRole } = auth;
+    const all = await this.entitiesRepository.find({
       where: { tenantId },
       order: { menuOrder: 'ASC', name: 'ASC' },
     });
+    const readable = await this.permissionsService.filterReadableEntityIds(
+      userId,
+      tenantId,
+      systemRole,
+      all.map((e) => e.id),
+    );
+    const readableSet = new Set(readable);
+    const snapshot = await this.permissionsService.getSnapshot(
+      userId,
+      tenantId,
+      systemRole,
+    );
+    if (snapshot.isFullAccess) return all;
+    return all.filter((e) => readableSet.has(e.id));
   }
 
-  async findOne(id: string, tenantId?: string): Promise<Entity> {
+  async findOne(id: string, auth: EntityAuthContext): Promise<Entity> {
+    const { tenantId, userId, systemRole } = auth;
     const entity = await this.entitiesRepository.findOne({
       where: { id, tenantId },
     });
@@ -82,10 +125,19 @@ export class EntitiesService {
       throw new NotFoundException(`Entity with ID ${id} not found`);
     }
 
+    await this.permissionsService.assertEntityAction(
+      userId,
+      tenantId,
+      systemRole,
+      id,
+      'read',
+    );
+
     return entity;
   }
 
-  async findBySlug(slug: string, tenantId?: string): Promise<Entity> {
+  async findBySlug(slug: string, auth: EntityAuthContext): Promise<Entity> {
+    const { tenantId } = auth;
     const entity = await this.entitiesRepository.findOne({
       where: { slug, tenantId },
     });
@@ -94,16 +146,21 @@ export class EntitiesService {
       throw new NotFoundException(`Entity with slug '${slug}' not found`);
     }
 
-    return entity;
+    return this.findOne(entity.id, auth);
   }
 
   async update(
     id: string,
     updateEntityDto: UpdateEntityDto,
-    userId: string,
-    tenantId?: string,
+    auth: EntityAuthContext,
   ): Promise<Entity> {
-    const entity = await this.findOne(id, tenantId);
+    const { userId, tenantId, systemRole } = auth;
+    await this.permissionsService.assertCanManageSchemas(
+      userId,
+      tenantId,
+      systemRole,
+    );
+    const entity = await this.findOneForTenant(id, tenantId);
 
     // If updating slug, check for conflicts
     if (updateEntityDto.slug && updateEntityDto.slug !== entity.slug) {
@@ -119,11 +176,29 @@ export class EntitiesService {
     }
 
     await this.entitiesRepository.update(id, updateEntityDto as any);
-    return this.findOne(id, tenantId);
+    const updated = await this.findOneForTenant(id, tenantId);
+
+    await this.auditLogsService.log({
+      tenantId,
+      actorId: userId,
+      action: AuditAction.ENTITY_UPDATED,
+      resourceType: 'entity',
+      resourceId: id,
+      resourceName: updated.name,
+      metadata: { changes: updateEntityDto },
+    });
+
+    return updated;
   }
 
-  async remove(id: string, tenantId?: string): Promise<void> {
-    const entity = await this.findOne(id, tenantId);
+  async remove(id: string, auth: EntityAuthContext): Promise<void> {
+    const { userId, tenantId, systemRole } = auth;
+    await this.permissionsService.assertCanManageSchemas(
+      userId,
+      tenantId,
+      systemRole,
+    );
+    const entity = await this.findOneForTenant(id, tenantId);
 
     // Check if there's any data associated with this entity
     const dataCount = await this.entityDataRepository.count({
@@ -137,10 +212,50 @@ export class EntitiesService {
     }
 
     await this.entitiesRepository.delete(id);
+
+    await this.auditLogsService.log({
+      tenantId,
+      actorId: userId,
+      action: AuditAction.ENTITY_DELETED,
+      resourceType: 'entity',
+      resourceId: id,
+      resourceName: entity.name,
+    });
+  }
+
+  private async findOneForTenant(
+    id: string,
+    tenantId?: string,
+  ): Promise<Entity> {
+    const entity = await this.entitiesRepository.findOne({
+      where: { id, tenantId },
+    });
+    if (!entity) {
+      throw new NotFoundException(`Entity with ID ${id} not found`);
+    }
+    return entity;
+  }
+
+  private validateEntityFieldDefinitions(
+    fields: Array<{ type: string; label: string; relatedEntityId?: string }> | undefined,
+  ): void {
+    if (!fields?.length) return;
+
+    for (const field of fields) {
+      if (field.type === 'lookup' && !field.relatedEntityId) {
+        throw new BadRequestException(
+          `Lookup field "${field.label}" requires a related entity`,
+        );
+      }
+    }
   }
 
   // Dynamic data validation
-  private validateDynamicData(entity: Entity, data: any): void {
+  private async validateDynamicData(
+    entity: Entity,
+    data: Record<string, any>,
+    tenantId?: string,
+  ): Promise<void> {
     if (!entity.fields || !Array.isArray(entity.fields)) {
       throw new BadRequestException(
         'Entity fields are not properly configured',
@@ -208,26 +323,96 @@ export class EntitiesService {
             );
           }
           break;
+        case 'lookup':
+          if (value && field.relatedEntityId) {
+            await this.assertLookupValue(
+              field.relatedEntityId,
+              value,
+              tenantId,
+            );
+          }
+          break;
       }
 
-      // Unique field validation
-      if (field.unique && value) {
-        // This would require checking against existing data
-        // For now, just log warning
-        console.warn(
-          `Unique field validation not implemented for ${field.name}`,
+      if (field.unique && value !== undefined && value !== null && value !== '') {
+        await this.assertFieldUnique(
+          entity.id,
+          field.name,
+          value,
+          tenantId,
         );
       }
+    }
+  }
+
+  private async assertLookupValue(
+    relatedEntityId: string,
+    value: unknown,
+    tenantId?: string,
+  ): Promise<void> {
+    const id = String(value);
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      throw new BadRequestException('Lookup value must be a valid record id');
+    }
+
+    const record = await this.entityDataRepository.findOne({
+      where: { id, entityId: relatedEntityId, tenantId },
+    });
+
+    if (!record) {
+      throw new BadRequestException(
+        'Lookup value must reference an existing related record',
+      );
+    }
+  }
+
+  private async assertFieldUnique(
+    entityId: string,
+    fieldName: string,
+    value: unknown,
+    tenantId?: string,
+    excludeDataId?: string,
+  ): Promise<void> {
+    const qb = this.entityDataRepository
+      .createQueryBuilder('d')
+      .where('d.entityId = :entityId', { entityId })
+      .andWhere('d.tenantId = :tenantId', { tenantId })
+      .andWhere(`d.data ->> :fieldName = :value`, {
+        fieldName,
+        value: String(value),
+      });
+
+    if (excludeDataId) {
+      qb.andWhere('d.id != :excludeDataId', { excludeDataId });
+    }
+
+    const conflict = await qb.getOne();
+    if (conflict) {
+      throw new BadRequestException(
+        `Value for "${fieldName}" must be unique`,
+      );
     }
   }
 
   // Entity Data CRUD Operations
   async createEntityData(
     createEntityDataDto: CreateEntityDataDto,
-    userId: string,
-    tenantId?: string,
+    auth: EntityAuthContext,
   ): Promise<EntityData> {
-    const entity = await this.findOne(createEntityDataDto.entityId, tenantId);
+    const { userId, tenantId, systemRole } = auth;
+    await this.permissionsService.assertEntityAction(
+      userId,
+      tenantId,
+      systemRole,
+      createEntityDataDto.entityId,
+      'create',
+    );
+    const entity = await this.findOneForTenant(
+      createEntityDataDto.entityId,
+      tenantId,
+    );
 
     if (!entity) {
       throw new NotFoundException(
@@ -235,8 +420,11 @@ export class EntitiesService {
       );
     }
 
-    // Validate dynamic data against entity schema
-    this.validateDynamicData(entity, createEntityDataDto.data);
+    await this.validateDynamicData(
+      entity,
+      createEntityDataDto.data,
+      tenantId,
+    );
 
     const entityData = this.entityDataRepository.create({
       ...createEntityDataDto,
@@ -257,23 +445,33 @@ export class EntitiesService {
       tenantId,
     );
 
+    await this.auditLogsService.log({
+      tenantId,
+      actorId: userId,
+      action: AuditAction.ENTITY_DATA_CREATED,
+      resourceType: 'entity_data',
+      resourceId: saved.id,
+      resourceName: entity.name,
+    });
+
     return saved;
   }
 
   async findAllData(
     entityId: string,
-    tenantId?: string,
+    auth: EntityAuthContext,
   ): Promise<EntityData[]> {
-    // Verify entity exists and belongs to tenant
-    await this.findOne(entityId, tenantId);
+    await this.findOne(entityId, auth);
 
+    const { tenantId } = auth;
     return this.entityDataRepository.find({
       where: { entityId, tenantId },
       order: { createdAt: 'DESC' },
     });
   }
 
-  async findDataById(id: string, tenantId?: string): Promise<EntityData> {
+  async findDataById(id: string, auth: EntityAuthContext): Promise<EntityData> {
+    const { tenantId, userId, systemRole } = auth;
     const entityData = await this.entityDataRepository.findOne({
       where: { id, tenantId },
     });
@@ -282,23 +480,42 @@ export class EntitiesService {
       throw new NotFoundException(`Entity data with ID ${id} not found`);
     }
 
+    await this.permissionsService.assertEntityAction(
+      userId,
+      tenantId,
+      systemRole,
+      entityData.entityId,
+      'read',
+    );
+
     return entityData;
   }
 
   async updateData(
     id: string,
     updateEntityDataDto: UpdateEntityDataDto,
-    userId: string,
-    tenantId?: string,
+    auth: EntityAuthContext,
   ): Promise<EntityData> {
-    const entityData = await this.findDataById(id, tenantId);
+    const { userId, tenantId, systemRole } = auth;
+    const entityData = await this.findDataById(id, auth);
 
-    // Get entity to validate fields
-    const entity = await this.findOne(entityData.entityId, tenantId);
+    await this.permissionsService.assertEntityAction(
+      userId,
+      tenantId,
+      systemRole,
+      entityData.entityId,
+      'update',
+    );
 
-    // Validate updated data only if data is provided
+    const entity = await this.findOneForTenant(entityData.entityId, tenantId);
+
     if (updateEntityDataDto.data) {
-      this.validateEntityData(updateEntityDataDto.data, entity);
+      await this.validateEntityData(
+        updateEntityDataDto.data,
+        entity,
+        tenantId,
+        id,
+      );
     }
 
     await this.entityDataRepository.update(id, {
@@ -306,22 +523,53 @@ export class EntitiesService {
       updatedById: userId,
     });
 
-    return this.findDataById(id, tenantId);
+    const updated = await this.findDataById(id, auth);
+
+    await this.auditLogsService.log({
+      tenantId,
+      actorId: userId,
+      action: AuditAction.ENTITY_DATA_UPDATED,
+      resourceType: 'entity_data',
+      resourceId: id,
+      resourceName: entity.name,
+    });
+
+    return updated;
   }
 
-  async removeData(id: string, tenantId?: string): Promise<void> {
-    await this.findDataById(id, tenantId);
+  async removeData(id: string, auth: EntityAuthContext): Promise<void> {
+    const { userId, tenantId, systemRole } = auth;
+    const entityData = await this.findDataById(id, auth);
+
+    await this.permissionsService.assertEntityAction(
+      userId,
+      tenantId,
+      systemRole,
+      entityData.entityId,
+      'delete',
+    );
+
+    const entity = await this.findOneForTenant(entityData.entityId, tenantId);
     await this.entityDataRepository.delete(id);
+
+    await this.auditLogsService.log({
+      tenantId,
+      actorId: userId,
+      action: AuditAction.ENTITY_DATA_DELETED,
+      resourceType: 'entity_data',
+      resourceId: id,
+      resourceName: entity.name,
+    });
   }
 
   // Search data
   async searchData(
     entityId: string,
     query: string,
-    tenantId?: string,
+    auth: EntityAuthContext,
   ): Promise<EntityData[]> {
-    // Verify entity exists and belongs to tenant
-    await this.findOne(entityId, tenantId);
+    await this.findOne(entityId, auth);
+    const { tenantId } = auth;
 
     return this.entityDataRepository
       .createQueryBuilder('entityData')
@@ -333,10 +581,12 @@ export class EntitiesService {
   }
 
   // Helper methods
-  private validateEntityData(
+  private async validateEntityData(
     data: Record<string, any>,
     entity: Entity,
-  ): void {
+    tenantId?: string,
+    excludeDataId?: string,
+  ): Promise<void> {
     const errors: string[] = [];
 
     for (const field of entity.fields) {
@@ -361,9 +611,22 @@ export class EntitiesService {
         errors.push(`Field '${field.label}' must be of type ${field.type}`);
       }
 
-      // Unique validation (simplified - would need database query for full validation)
       if (field.unique) {
-        // TODO: Implement unique validation with database query
+        await this.assertFieldUnique(
+          entity.id,
+          field.name,
+          value,
+          tenantId,
+          excludeDataId,
+        );
+      }
+
+      if (field.type === 'lookup' && field.relatedEntityId) {
+        await this.assertLookupValue(
+          field.relatedEntityId,
+          value,
+          tenantId,
+        );
       }
 
       // Validation rules
@@ -402,6 +665,8 @@ export class EntitiesService {
       case 'file':
       case 'image':
         return typeof value === 'string'; // File path or URL
+      case 'lookup':
+        return typeof value === 'string';
       default:
         return true;
     }
@@ -448,9 +713,16 @@ export class EntitiesService {
   }
 
   // Get statistics
-  async getEntityStats(entityId: string, tenantId?: string): Promise<any> {
-    // Verify entity exists and belongs to tenant
-    await this.findOne(entityId, tenantId);
+  async getEntityStats(
+    entityId: string,
+    auth: EntityAuthContext,
+  ): Promise<{
+    totalRecords: number;
+    recentRecords: number;
+    entityId: string;
+  }> {
+    await this.findOne(entityId, auth);
+    const { tenantId } = auth;
 
     const totalRecords = await this.entityDataRepository.count({
       where: { entityId, tenantId },
@@ -471,6 +743,72 @@ export class EntitiesService {
     };
   }
 
+  async getEntityInsights(
+    entityId: string,
+    auth: EntityAuthContext,
+  ): Promise<{
+    entityId: string;
+    entityName: string;
+    totalRecords: number;
+    recentRecords: number;
+    recordsByDay: { date: string; label: string; count: number }[];
+    fieldBreakdown: { name: string; total: number } | null;
+  }> {
+    const entity = await this.findOne(entityId, auth);
+    const stats = await this.getEntityStats(entityId, auth);
+    const { tenantId } = auth;
+
+    const rows = await this.entityDataRepository.find({
+      where: { entityId, tenantId },
+      order: { createdAt: 'ASC' },
+      take: 2000,
+    });
+
+    const byDay: Record<string, number> = {};
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      byDay[d.toISOString().slice(0, 10)] = 0;
+    }
+
+    for (const row of rows) {
+      const key = new Date(row.createdAt).toISOString().slice(0, 10);
+      if (byDay[key] !== undefined) {
+        byDay[key]++;
+      }
+    }
+
+    const recordsByDay = Object.entries(byDay).map(([date, count]) => ({
+      date,
+      label: new Date(date + 'T12:00:00').toLocaleDateString('en-US', {
+        weekday: 'short',
+      }),
+      count,
+    }));
+
+    const numberField = entity.fields?.find((f) =>
+      ['number', 'integer', 'decimal'].includes(f.type),
+    );
+
+    let fieldBreakdown: { name: string; total: number } | null = null;
+    if (numberField) {
+      const total = rows.reduce(
+        (sum, r) => sum + (Number(r.data[numberField.name]) || 0),
+        0,
+      );
+      fieldBreakdown = { name: numberField.label, total };
+    }
+
+    return {
+      entityId,
+      entityName: entity.name,
+      totalRecords: stats.totalRecords,
+      recentRecords: stats.recentRecords,
+      recordsByDay,
+      fieldBreakdown,
+    };
+  }
+
   /**
    * Trigger workflows that are linked to this entity and have event_based trigger
    */
@@ -485,34 +823,14 @@ export class EntitiesService {
     if (!tenantId) return;
 
     try {
-      // Lazily resolve WorkflowExecutionService to avoid circular DI
-      const workflowExecutionService = this.moduleRef.get(WorkflowExecutionService, { strict: false });
-
-      // Find active workflows linked to this entity with event_based trigger
-      const workflows = await this.workflowsRepository.find({
-        where: { tenant: { id: tenantId }, status: 'active', trigger: 'event_based' },
-      });
-
-      for (const workflow of workflows) {
-        const isLinked = workflow.entityAssignments?.some(
-          (a: any) => a.entityId === entityId,
-        );
-        if (!isLinked) continue;
-
-        console.log(`🔥 Triggering workflow "${workflow.name}" for entity "${entityName}" (data ID: ${dataId})`);
-
-        await workflowExecutionService.triggerWorkflow(
-          workflow.id,
-          userId,
-          tenantId,
-          {
-            entityId: dataId,
-            entityType: entityName,
-            entityData: data,
-            triggerType: 'event_based',
-          },
-        );
-      }
+      await this.workflowTriggerService.triggerForEntityRecord(
+        tenantId,
+        entityId,
+        entityName,
+        dataId,
+        data,
+        userId,
+      );
     } catch (error) {
       // Don't fail the entity data creation if workflow trigger fails
       console.error('Failed to trigger workflows for entity:', error);

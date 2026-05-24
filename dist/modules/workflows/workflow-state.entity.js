@@ -34,7 +34,7 @@ __decorate([
     __metadata("design:type", String)
 ], WorkflowState.prototype, "name", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ unique: true }),
+    (0, typeorm_1.Column)(),
     __metadata("design:type", String)
 ], WorkflowState.prototype, "key", void 0);
 __decorate([
@@ -66,6 +66,7 @@ __decorate([
     __metadata("design:type", Date)
 ], WorkflowState.prototype, "updatedAt", void 0);
 exports.WorkflowState = WorkflowState = __decorate([
-    (0, typeorm_1.Entity)('workflow_states')
+    (0, typeorm_1.Entity)('workflow_states'),
+    (0, typeorm_1.Unique)(['workflowId', 'key'])
 ], WorkflowState);
 //# sourceMappingURL=workflow-state.entity.js.map

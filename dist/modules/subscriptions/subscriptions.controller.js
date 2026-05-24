@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var SubscriptionsController_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SubscriptionsController = void 0;
 const common_1 = require("@nestjs/common");
@@ -21,9 +22,10 @@ const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
 const roles_guard_1 = require("../auth/guards/roles.guard");
 const subscriptions_service_1 = require("./subscriptions.service");
 const chapa_service_1 = require("./chapa.service");
-let SubscriptionsController = class SubscriptionsController {
+let SubscriptionsController = SubscriptionsController_1 = class SubscriptionsController {
     subscriptionsService;
     chapaService;
+    logger = new common_1.Logger(SubscriptionsController_1.name);
     constructor(subscriptionsService, chapaService) {
         this.subscriptionsService = subscriptionsService;
         this.chapaService = chapaService;
@@ -67,7 +69,7 @@ let SubscriptionsController = class SubscriptionsController {
             return_url: `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard/billing/success?status=success&tx_ref=${tx_ref}`,
             callback_url: `${process.env.BACKEND_URL || 'http://localhost:3000'}/subscriptions/webhook/chapa`,
         };
-        console.log('Sending to Chapa:', JSON.stringify(payload, null, 2));
+        this.logger.debug(`Chapa initialize tx_ref=${tx_ref}`);
         return this.chapaService.initializeTransaction(payload);
     }
     async verify(tx_ref, req) {
@@ -76,21 +78,16 @@ let SubscriptionsController = class SubscriptionsController {
         if (verification.status === 'success') {
             const parts = tx_ref.split('-');
             const planPart = parts[2];
-            console.log('Verifying payment for tx_ref:', tx_ref);
-            console.log('Extracted Plan Part:', planPart);
+            this.logger.log(`Verifying payment tx_ref=${tx_ref} planPart=${planPart}`);
             const allPlans = await this.subscriptionsService.findAllPlans();
             const plan = allPlans.find(p => p.id.startsWith(planPart));
             if (plan) {
-                console.log('Found matching plan:', plan.name, 'with ID:', plan.id);
                 await this.subscriptionsService.upgradePlan(tenantId, plan.id);
-                console.log('Successfully upgraded tenant:', tenantId, 'to plan:', plan.name);
+                this.logger.log(`Tenant ${tenantId} upgraded to plan ${plan.name}`);
                 return { status: 'success', message: 'Payment verified and plan upgraded' };
             }
-            else {
-                console.log('CRITICAL: No plan found starting with:', planPart);
-                console.log('Available plan IDs:', allPlans.map(p => p.id));
-                return { status: 'failed', message: 'Plan matching failed' };
-            }
+            this.logger.warn(`No plan matched planPart=${planPart}; available=${allPlans.map(p => p.id).join(', ')}`);
+            return { status: 'failed', message: 'Plan matching failed' };
         }
         return { status: 'failed', message: 'Payment verification failed' };
     }
@@ -184,7 +181,7 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], SubscriptionsController.prototype, "createPlan", null);
-exports.SubscriptionsController = SubscriptionsController = __decorate([
+exports.SubscriptionsController = SubscriptionsController = SubscriptionsController_1 = __decorate([
     (0, swagger_1.ApiTags)('subscriptions'),
     (0, common_1.Controller)('subscriptions'),
     (0, swagger_1.ApiBearerAuth)(),

@@ -9,6 +9,9 @@ import { Task } from '../tasks/task.entity';
 import { Notification } from '../notifications/notification.entity';
 import { User } from '../users/user.entity';
 import { ConditionalLogicService } from './conditional-logic.service';
+import { WorkflowAutomationService } from './workflow-automation.service';
+import { EmailService } from '../email/email.service';
+import { EntityData } from '../entities/entity-data.entity';
 export declare class WorkflowExecutionService {
     private executionRepo;
     private workflowRepo;
@@ -20,17 +23,32 @@ export declare class WorkflowExecutionService {
     private workflowStateRepo;
     private workflowTransitionRepo;
     private conditionalLogicService;
-    constructor(executionRepo: Repository<WorkflowExecution>, workflowRepo: Repository<Workflow>, stepRepo: Repository<WorkflowStep>, taskRepo: Repository<Task>, notificationRepo: Repository<Notification>, userRepo: Repository<User>, eventRepo: Repository<WorkflowEvent>, workflowStateRepo: Repository<WorkflowStateDefinition>, workflowTransitionRepo: Repository<WorkflowTransition>, conditionalLogicService: ConditionalLogicService);
+    private workflowAutomationService;
+    private emailService;
+    private entityDataRepo;
+    private readonly logger;
+    constructor(executionRepo: Repository<WorkflowExecution>, workflowRepo: Repository<Workflow>, stepRepo: Repository<WorkflowStep>, taskRepo: Repository<Task>, notificationRepo: Repository<Notification>, userRepo: Repository<User>, eventRepo: Repository<WorkflowEvent>, workflowStateRepo: Repository<WorkflowStateDefinition>, workflowTransitionRepo: Repository<WorkflowTransition>, conditionalLogicService: ConditionalLogicService, workflowAutomationService: WorkflowAutomationService, emailService: EmailService, entityDataRepo: Repository<EntityData>);
     triggerWorkflow(workflowId: string, triggeredByUserId: string, tenantId: string, context?: {
         entityId?: string;
+        recordId?: string;
+        entityDefinitionId?: string;
         entityType?: string;
         entityData?: Record<string, any>;
         triggerType?: string;
     }): Promise<WorkflowExecution>;
     private runNextStep;
+    private getSortedSteps;
+    private loadExecution;
+    private completeExecution;
+    private runStepAt;
+    private gotoStepById;
+    private proceedAfterStep;
+    private executeStepOfType;
+    private routeAfterRejection;
     private executeStep;
     private executeAutomationStep;
     private executeNotificationStep;
+    private buildTaskEntityMetadata;
     private executeTaskStep;
     private executeApprovalStep;
     private executeConditionStep;
@@ -51,6 +69,9 @@ export declare class WorkflowExecutionService {
     private transitionState;
     private findValidTransitions;
     executeTransition(executionId: string, transitionId: string, userId: string, tenantId: string, notes?: string): Promise<WorkflowExecution>;
+    private executeTransitionActions;
+    private runTransitionAction;
+    private createTaskFromTransitionConfig;
     handleApproval(executionId: string, taskId: string, userId: string, decision: 'approve' | 'reject', notes?: string): Promise<WorkflowExecution>;
     getExecutionEvents(executionId: string, tenantId: string): Promise<WorkflowEvent[]>;
 }

@@ -19,15 +19,22 @@ const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
 const workflows_service_1 = require("./workflows.service");
 const create_workflow_dto_1 = require("./dto/create-workflow.dto");
 const update_workflow_dto_1 = require("./dto/update-workflow.dto");
+const deploy_workflow_template_dto_1 = require("./dto/deploy-workflow-template.dto");
+const workflow_analytics_service_1 = require("./workflow-analytics.service");
 let WorkflowsController = class WorkflowsController {
     workflowsService;
-    constructor(workflowsService) {
+    analyticsService;
+    constructor(workflowsService, analyticsService) {
         this.workflowsService = workflowsService;
+        this.analyticsService = analyticsService;
     }
     async create(createWorkflowDto, req) {
         const userId = req.user.userId;
         const tenantId = req.user.tenantId;
         return this.workflowsService.create(createWorkflowDto, userId, tenantId);
+    }
+    async deployTemplate(dto, req) {
+        return this.workflowsService.deployFromTemplate(dto, req.user.userId, req.user.tenantId);
     }
     async findAll(req, status) {
         const tenantId = req.user.tenantId;
@@ -65,6 +72,15 @@ let WorkflowsController = class WorkflowsController {
     async getStats(req) {
         const tenantId = req.user.tenantId;
         return this.workflowsService.getWorkflowStats(tenantId);
+    }
+    async getAnalytics(req, dateRange, workflowId) {
+        return this.analyticsService.getAnalytics(req.user.tenantId, dateRange || '30d', workflowId);
+    }
+    async exportAnalytics(req, res, dateRange, workflowId) {
+        const csv = await this.analyticsService.exportCsv(req.user.tenantId, dateRange || '30d', workflowId);
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="workflow-analytics.csv"`);
+        res.send(csv);
     }
     async getWorkflowEntities(id, req) {
         const tenantId = req.user.tenantId;
@@ -131,6 +147,17 @@ __decorate([
     __metadata("design:paramtypes", [create_workflow_dto_1.CreateWorkflowDto, Object]),
     __metadata("design:returntype", Promise)
 ], WorkflowsController.prototype, "create", null);
+__decorate([
+    (0, common_1.Post)('deploy-template'),
+    (0, swagger_1.ApiOperation)({
+        summary: 'Deploy a workflow from template (states, transitions, steps)',
+    }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [deploy_workflow_template_dto_1.DeployWorkflowTemplateDto, Object]),
+    __metadata("design:returntype", Promise)
+], WorkflowsController.prototype, "deployTemplate", null);
 __decorate([
     (0, common_1.Get)(),
     (0, swagger_1.ApiOperation)({ summary: 'Get all workflows' }),
@@ -229,6 +256,27 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], WorkflowsController.prototype, "getStats", null);
+__decorate([
+    (0, common_1.Get)('analytics'),
+    (0, swagger_1.ApiOperation)({ summary: 'Workflow execution analytics' }),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Query)('dateRange')),
+    __param(2, (0, common_1.Query)('workflowId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:returntype", Promise)
+], WorkflowsController.prototype, "getAnalytics", null);
+__decorate([
+    (0, common_1.Get)('analytics/export'),
+    (0, swagger_1.ApiOperation)({ summary: 'Export workflow analytics as CSV' }),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Res)()),
+    __param(2, (0, common_1.Query)('dateRange')),
+    __param(3, (0, common_1.Query)('workflowId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, String, String]),
+    __metadata("design:returntype", Promise)
+], WorkflowsController.prototype, "exportAnalytics", null);
 __decorate([
     (0, common_1.Get)(':id/entities'),
     (0, swagger_1.ApiParam)({ name: 'id', description: 'Workflow ID' }),
@@ -366,6 +414,7 @@ exports.WorkflowsController = WorkflowsController = __decorate([
     (0, common_1.Controller)('workflows'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, swagger_1.ApiBearerAuth)(),
-    __metadata("design:paramtypes", [workflows_service_1.WorkflowsService])
+    __metadata("design:paramtypes", [workflows_service_1.WorkflowsService,
+        workflow_analytics_service_1.WorkflowAnalyticsService])
 ], WorkflowsController);
 //# sourceMappingURL=workflows.controller.js.map

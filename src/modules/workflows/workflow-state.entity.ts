@@ -5,10 +5,12 @@ import {
   ManyToOne,
   CreateDateColumn,
   UpdateDateColumn,
+  Unique,
 } from 'typeorm';
 import { Workflow } from './workflow.entity';
 
 @Entity('workflow_states')
+@Unique(['workflowId', 'key'])
 export class WorkflowState {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -16,7 +18,7 @@ export class WorkflowState {
   @Column()
   name: string;
 
-  @Column({ unique: true })
+  @Column()
   key: string;
 
   @Column({ type: 'text', nullable: true })

@@ -14,12 +14,16 @@ const hrm_controller_1 = require("./hrm.controller");
 const employee_entity_1 = require("./entities/employee.entity");
 const department_entity_1 = require("./entities/department.entity");
 const position_entity_1 = require("./entities/position.entity");
+const workflows_module_1 = require("../workflows/workflows.module");
 let HrmModule = class HrmModule {
 };
 exports.HrmModule = HrmModule;
 exports.HrmModule = HrmModule = __decorate([
     (0, common_1.Module)({
-        imports: [typeorm_1.TypeOrmModule.forFeature([employee_entity_1.Employee, department_entity_1.Department, position_entity_1.Position])],
+        imports: [
+            typeorm_1.TypeOrmModule.forFeature([employee_entity_1.Employee, department_entity_1.Department, position_entity_1.Position]),
+            workflows_module_1.WorkflowsModule,
+        ],
         controllers: [hrm_controller_1.HrmController],
         providers: [hrm_service_1.HrmService],
         exports: [hrm_service_1.HrmService],

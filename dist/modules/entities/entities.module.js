@@ -13,16 +13,19 @@ const entities_controller_1 = require("./entities.controller");
 const entities_service_1 = require("./entities.service");
 const entity_entity_1 = require("./entity.entity");
 const entity_data_entity_1 = require("./entity-data.entity");
-const workflow_entity_1 = require("../workflows/workflow.entity");
 const subscriptions_module_1 = require("../subscriptions/subscriptions.module");
+const audit_logs_module_1 = require("../audit-logs/audit-logs.module");
+const workflows_module_1 = require("../workflows/workflows.module");
 let EntitiesModule = class EntitiesModule {
 };
 exports.EntitiesModule = EntitiesModule;
 exports.EntitiesModule = EntitiesModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            typeorm_1.TypeOrmModule.forFeature([entity_entity_1.Entity, entity_data_entity_1.EntityData, workflow_entity_1.Workflow]),
+            typeorm_1.TypeOrmModule.forFeature([entity_entity_1.Entity, entity_data_entity_1.EntityData]),
             subscriptions_module_1.SubscriptionsModule,
+            audit_logs_module_1.AuditLogsModule,
+            (0, common_1.forwardRef)(() => workflows_module_1.WorkflowsModule),
         ],
         controllers: [entities_controller_1.EntitiesController],
         providers: [entities_service_1.EntitiesService],

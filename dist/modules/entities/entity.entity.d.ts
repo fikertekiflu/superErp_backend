@@ -16,13 +16,15 @@ export declare enum FieldType {
     FILE = "file",
     IMAGE = "image",
     DECIMAL = "decimal",
-    INTEGER = "integer"
+    INTEGER = "integer",
+    LOOKUP = "lookup"
 }
 export declare class Entity {
     id: string;
     name: string;
     slug: string;
     description: string;
+    pluralName: string;
     fields: FieldDefinition[];
     status: EntityStatus;
     icon: string;
@@ -44,6 +46,9 @@ export interface FieldDefinition {
     unique: boolean;
     defaultValue?: any;
     options?: string[];
+    relatedEntityId?: string;
+    relatedEntitySlug?: string;
+    displayField?: string;
     validation?: {
         min?: number;
         max?: number;

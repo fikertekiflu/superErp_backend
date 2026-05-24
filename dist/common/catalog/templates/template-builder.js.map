@@ -1,0 +1,1 @@
+{"version":3,"file":"template-builder.js","sourceRoot":"","sources":["../../../../src/common/catalog/templates/template-builder.ts"],"names":[],"mappings":";;AAWA,wCAOC;AAPD,SAAgB,cAAc,CAAC,CAAkB;IAC/C,OAAO;QACL,QAAQ,EAAE,EAAE;QACZ,GAAG,CAAC;QACJ,OAAO,EAAE,CAAC,CAAC,OAAO,IAAI,QAAQ;QAC9B,UAAU,EAAE,CAAC,CAAC,UAAU,IAAI,CAAC,OAAO,CAAC;KACtC,CAAC;AACJ,CAAC"}

@@ -59,10 +59,17 @@ export class WorkflowStep {
     // Branching logic
     nextStepId?: string; // Next step on success/completion
     onRejectStepId?: string; // Step to go to on rejection (optional)
+    onRejectAction?: 'cancel' | 'goto';
+    onTrueStepId?: string;
+    onFalseStepId?: string;
+    onFalseAction?: 'complete' | 'next' | 'goto';
+    matchMode?: 'all' | 'any';
     
     // Approval specific
     rejectionState?: string; // State to transition to on rejection
     allowRejection?: boolean; // Whether rejection is allowed
+    /** Entity field used for per-role/user approval limits (default: amount) */
+    approvalAmountField?: string;
     
     // Conditions
     conditions?: {

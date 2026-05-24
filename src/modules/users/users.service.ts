@@ -1,9 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User, UserRole, UserStatus } from './user.entity';
-import { Role } from '../roles/role.entity';
+import { Role, RoleEntityPermission } from '../roles/role.entity';
 
 @Injectable()
 export class UsersService {
@@ -26,6 +31,74 @@ export class UsersService {
     await this.userRepository.update(id, updateData);
   }
 
+  async updateProfile(
+    userId: string,
+    data: { firstName?: string; lastName?: string; phone?: string },
+  ): Promise<User> {
+    const user = await this.findOne(userId);
+    if (!user) throw new NotFoundException('User not found');
+
+    const patch: Partial<User> = {};
+    if (data.firstName !== undefined) patch.firstName = data.firstName.trim();
+    if (data.lastName !== undefined) patch.lastName = data.lastName.trim();
+    if (data.phone !== undefined) {
+      patch.phone = data.phone.trim() ? data.phone.trim() : undefined;
+    }
+
+    await this.userRepository.update(userId, patch);
+    const updated = await this.findOne(userId);
+    if (!updated) throw new NotFoundException('User not found');
+    return updated;
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.findOne(userId);
+    if (!user) throw new NotFoundException('User not found');
+
+    const valid = await bcrypt.compare(currentPassword, user.password);
+    if (!valid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    if (currentPassword === newPassword) {
+      throw new BadRequestException(
+        'New password must be different from current password',
+      );
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await this.userRepository.update(userId, { password: hashed });
+  }
+
+  sanitizeUser(user: User): Omit<User, 'password'> {
+    const { password: _pw, ...safe } = user as User & { password?: string };
+    return safe;
+  }
+
+  async updateUserApprovalLimit(
+    userId: string,
+    tenantId: string,
+    approvalLimitOverride?: number | null,
+  ): Promise<User> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId, tenantId },
+      relations: ['roles'],
+    });
+    if (!user) throw new NotFoundException('User not found');
+    await this.userRepository.update(userId, {
+      approvalLimitOverride:
+        approvalLimitOverride === undefined ? null : approvalLimitOverride,
+    });
+    return this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['roles'],
+    }) as Promise<User>;
+  }
+
   // Tenant Role Management
   async getTenantRoles(tenantId: string): Promise<Role[]> {
     return this.roleRepository.find({
@@ -34,9 +107,18 @@ export class UsersService {
     });
   }
 
-  async createTenantRole(tenantId: string, data: { name: string; description?: string }): Promise<Role> {
+  async createTenantRole(
+    tenantId: string,
+    data: {
+      name: string;
+      description?: string;
+      entityPermissions?: RoleEntityPermission[];
+    },
+  ): Promise<Role> {
     const role = this.roleRepository.create({
-      ...data,
+      name: data.name,
+      description: data.description,
+      entityPermissions: data.entityPermissions || [],
       tenant: { id: tenantId },
       isActive: true,
     });

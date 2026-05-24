@@ -5,9 +5,13 @@ import { HrmController } from './hrm.controller';
 import { Employee } from './entities/employee.entity';
 import { Department } from './entities/department.entity';
 import { Position } from './entities/position.entity';
+import { WorkflowsModule } from '../workflows/workflows.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Employee, Department, Position])],
+  imports: [
+    TypeOrmModule.forFeature([Employee, Department, Position]),
+    WorkflowsModule,
+  ],
   controllers: [HrmController],
   providers: [HrmService],
   exports: [HrmService],

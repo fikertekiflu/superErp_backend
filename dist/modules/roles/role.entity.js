@@ -18,6 +18,8 @@ let Role = class Role {
     name;
     description;
     isActive;
+    entityPermissions;
+    maxApprovalAmount;
     tenant;
     users;
     createdAt;
@@ -40,6 +42,14 @@ __decorate([
     (0, typeorm_1.Column)({ default: true }),
     __metadata("design:type", Boolean)
 ], Role.prototype, "isActive", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'jsonb', default: [] }),
+    __metadata("design:type", Array)
+], Role.prototype, "entityPermissions", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'decimal', precision: 14, scale: 2, nullable: true }),
+    __metadata("design:type", Object)
+], Role.prototype, "maxApprovalAmount", void 0);
 __decorate([
     (0, typeorm_1.ManyToOne)(() => tenant_entity_1.Tenant, { nullable: true }),
     __metadata("design:type", tenant_entity_1.Tenant)

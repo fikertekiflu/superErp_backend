@@ -14,16 +14,21 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
+const config_1 = require("@nestjs/config");
 const swagger_1 = require("@nestjs/swagger");
 const auth_service_1 = require("./auth.service");
 const login_dto_1 = require("./dto/login.dto");
 const register_dto_1 = require("./dto/register.dto");
 const company_register_dto_1 = require("./dto/company-register.dto");
+const forgot_password_dto_1 = require("./dto/forgot-password.dto");
+const reset_password_dto_1 = require("./dto/reset-password.dto");
 const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
 let AuthController = class AuthController {
     authService;
-    constructor(authService) {
+    configService;
+    constructor(authService, configService) {
         this.authService = authService;
+        this.configService = configService;
     }
     async login(loginDto) {
         return this.authService.login(loginDto);
@@ -31,10 +36,24 @@ let AuthController = class AuthController {
     async register(registerDto) {
         return this.authService.register(registerDto);
     }
+    async forgotPassword(dto) {
+        return this.authService.forgotPassword(dto);
+    }
+    async validateResetToken(token) {
+        return this.authService.validatePasswordResetToken(token);
+    }
+    async resetPassword(dto) {
+        return this.authService.resetPassword(dto);
+    }
     async registerCompany(companyRegisterDto) {
         return this.authService.registerCompany(companyRegisterDto);
     }
-    async createSuperAdmin() {
+    async createSuperAdmin(headerSecret, body) {
+        const expected = this.configService.get('SETUP_SECRET');
+        const provided = headerSecret || body?.setupSecret;
+        if (!expected || provided !== expected) {
+            throw new common_1.ForbiddenException('Invalid or missing setup secret');
+        }
         return this.authService.createSuperAdmin();
     }
     async getProfile() {
@@ -63,6 +82,33 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "register", null);
 __decorate([
+    (0, common_1.Post)('forgot-password'),
+    (0, swagger_1.ApiOperation)({ summary: 'Request password reset email' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Reset requested (generic message)' }),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [forgot_password_dto_1.ForgotPasswordDto]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "forgotPassword", null);
+__decorate([
+    (0, common_1.Get)('reset-password/validate'),
+    (0, swagger_1.ApiOperation)({ summary: 'Check if password reset token is valid' }),
+    __param(0, (0, common_1.Query)('token')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "validateResetToken", null);
+__decorate([
+    (0, common_1.Post)('reset-password'),
+    (0, swagger_1.ApiOperation)({ summary: 'Set new password with reset token' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Password updated' }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: 'Invalid or expired token' }),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [reset_password_dto_1.ResetPasswordDto]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "resetPassword", null);
+__decorate([
     (0, common_1.Post)('register/company'),
     (0, swagger_1.ApiOperation)({ summary: 'Company registration' }),
     (0, swagger_1.ApiResponse)({
@@ -77,11 +123,12 @@ __decorate([
 ], AuthController.prototype, "registerCompany", null);
 __decorate([
     (0, common_1.Post)('init-super-admin'),
-    (0, swagger_1.ApiOperation)({ summary: 'Create super admin user' }),
+    (0, swagger_1.ApiOperation)({ summary: 'Create super admin user (requires setup secret)' }),
     (0, swagger_1.ApiResponse)({ status: 201, description: 'Super admin created successfully' }),
-    (0, swagger_1.ApiResponse)({ status: 409, description: 'Super admin already exists' }),
+    __param(0, (0, common_1.Headers)('x-setup-secret')),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "createSuperAdmin", null);
 __decorate([
@@ -98,6 +145,7 @@ __decorate([
 exports.AuthController = AuthController = __decorate([
     (0, swagger_1.ApiTags)('auth'),
     (0, common_1.Controller)('auth'),
-    __metadata("design:paramtypes", [auth_service_1.AuthService])
+    __metadata("design:paramtypes", [auth_service_1.AuthService,
+        config_1.ConfigService])
 ], AuthController);
 //# sourceMappingURL=auth.controller.js.map

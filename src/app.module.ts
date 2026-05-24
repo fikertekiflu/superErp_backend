@@ -19,9 +19,15 @@ import { TasksModule } from './modules/tasks/tasks.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { AccountingModule } from './modules/accounting/accounting.module';
+import { CommonModule } from './common/common.module';
+import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
+import { WorkflowCatalogModule } from './modules/workflow-catalog/workflow-catalog.module';
+import { EmailModule } from './modules/email/email.module';
 
 @Module({
   imports: [
+    CommonModule,
+    EmailModule,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
@@ -43,6 +49,8 @@ import { AccountingModule } from './modules/accounting/accounting.module';
     NotificationsModule,
     AttendanceModule,
     AccountingModule,
+    AuditLogsModule,
+    WorkflowCatalogModule,
   ],
   controllers: [AppController],
   providers: [AppService, DatabaseTestService],

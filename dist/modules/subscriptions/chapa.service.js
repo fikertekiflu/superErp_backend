@@ -11,13 +11,15 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
+var ChapaService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChapaService = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const axios_1 = __importDefault(require("axios"));
-let ChapaService = class ChapaService {
+let ChapaService = ChapaService_1 = class ChapaService {
     configService;
+    logger = new common_1.Logger(ChapaService_1.name);
     secretKey;
     baseUrl = 'https://api.chapa.co/v1';
     constructor(configService) {
@@ -26,7 +28,7 @@ let ChapaService = class ChapaService {
     }
     async initializeTransaction(data) {
         try {
-            console.log('CHAPA INITIALIZE PAYLOAD:', JSON.stringify(data, null, 2));
+            this.logger.debug(`Chapa initialize tx_ref=${data.tx_ref}`);
             const response = await axios_1.default.post(`${this.baseUrl}/transaction/initialize`, {
                 ...data,
                 customization: {
@@ -61,7 +63,7 @@ let ChapaService = class ChapaService {
     }
 };
 exports.ChapaService = ChapaService;
-exports.ChapaService = ChapaService = __decorate([
+exports.ChapaService = ChapaService = ChapaService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [config_1.ConfigService])
 ], ChapaService);

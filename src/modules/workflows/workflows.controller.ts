@@ -10,7 +10,9 @@ import {
   Request,
   UseGuards,
   Patch,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -22,13 +24,18 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { WorkflowsService } from './workflows.service';
 import { CreateWorkflowDto } from './dto/create-workflow.dto';
 import { UpdateWorkflowDto } from './dto/update-workflow.dto';
+import { DeployWorkflowTemplateDto } from './dto/deploy-workflow-template.dto';
+import { WorkflowAnalyticsService } from './workflow-analytics.service';
 
 @ApiTags('Workflows')
 @Controller('workflows')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class WorkflowsController {
-  constructor(private readonly workflowsService: WorkflowsService) {}
+  constructor(
+    private readonly workflowsService: WorkflowsService,
+    private readonly analyticsService: WorkflowAnalyticsService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a new workflow' })
@@ -39,6 +46,21 @@ export class WorkflowsController {
     const userId = req.user.userId;
     const tenantId = req.user.tenantId;
     return this.workflowsService.create(createWorkflowDto, userId, tenantId);
+  }
+
+  @Post('deploy-template')
+  @ApiOperation({
+    summary: 'Deploy a workflow from template (states, transitions, steps)',
+  })
+  async deployTemplate(
+    @Body() dto: DeployWorkflowTemplateDto,
+    @Request() req,
+  ) {
+    return this.workflowsService.deployFromTemplate(
+      dto,
+      req.user.userId,
+      req.user.tenantId,
+    );
   }
 
   @Get()
@@ -135,6 +157,41 @@ export class WorkflowsController {
   async getStats(@Request() req) {
     const tenantId = req.user.tenantId;
     return this.workflowsService.getWorkflowStats(tenantId);
+  }
+
+  @Get('analytics')
+  @ApiOperation({ summary: 'Workflow execution analytics' })
+  async getAnalytics(
+    @Request() req,
+    @Query('dateRange') dateRange?: string,
+    @Query('workflowId') workflowId?: string,
+  ) {
+    return this.analyticsService.getAnalytics(
+      req.user.tenantId,
+      dateRange || '30d',
+      workflowId,
+    );
+  }
+
+  @Get('analytics/export')
+  @ApiOperation({ summary: 'Export workflow analytics as CSV' })
+  async exportAnalytics(
+    @Request() req,
+    @Res() res: Response,
+    @Query('dateRange') dateRange?: string,
+    @Query('workflowId') workflowId?: string,
+  ) {
+    const csv = await this.analyticsService.exportCsv(
+      req.user.tenantId,
+      dateRange || '30d',
+      workflowId,
+    );
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="workflow-analytics.csv"`,
+    );
+    res.send(csv);
   }
 
   @Get(':id/entities')

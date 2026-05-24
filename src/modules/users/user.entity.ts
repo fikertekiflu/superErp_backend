@@ -80,6 +80,10 @@ export class User {
   @Column({ default: true })
   isActive: boolean;
 
+  /** Overrides role limits when set (null = use role limits) */
+  @Column({ type: 'decimal', precision: 14, scale: 2, nullable: true })
+  approvalLimitOverride?: number | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

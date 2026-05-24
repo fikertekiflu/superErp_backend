@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 export declare class ChapaService {
     private configService;
+    private readonly logger;
     private readonly secretKey;
     private readonly baseUrl;
     constructor(configService: ConfigService);

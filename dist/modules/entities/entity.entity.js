@@ -33,12 +33,14 @@ var FieldType;
     FieldType["IMAGE"] = "image";
     FieldType["DECIMAL"] = "decimal";
     FieldType["INTEGER"] = "integer";
+    FieldType["LOOKUP"] = "lookup";
 })(FieldType || (exports.FieldType = FieldType = {}));
 let Entity = class Entity {
     id;
     name;
     slug;
     description;
+    pluralName;
     fields;
     status;
     icon;
@@ -79,6 +81,14 @@ __decorate([
     (0, typeorm_1.Column)({ nullable: true }),
     __metadata("design:type", String)
 ], Entity.prototype, "description", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({
+        example: 'Leads',
+        description: 'Plural display name for lists and menus',
+    }),
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], Entity.prototype, "pluralName", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
         example: ['name', 'price', 'quantity'],

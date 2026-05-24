@@ -71,7 +71,17 @@ export class Tenant {
   verificationStatus: string; // 'pending' | 'submitted' | 'approved' | 'rejected'
 
   @Column({ type: 'jsonb', nullable: true })
-  verificationDocuments: Array<{ name: string; fileUrl: string; type: string; uploadedAt: string }>;
+  verificationDocuments: Array<{
+    id?: string;
+    name: string;
+    type: string;
+    uploadedAt: string;
+    fileUrl?: string;
+    fileName?: string;
+    mimeType?: string;
+    storagePath?: string;
+    fileSize?: number;
+  }>;
 
   @Column({ nullable: true })
   rejectionReason: string;

@@ -3,6 +3,7 @@ import { ChapaService } from './chapa.service';
 export declare class SubscriptionsController {
     private readonly subscriptionsService;
     private readonly chapaService;
+    private readonly logger;
     constructor(subscriptionsService: SubscriptionsService, chapaService: ChapaService);
     getPlans(): Promise<import("./plan.entity").Plan[]>;
     getMySubscription(req: any): Promise<import("./subscription.entity").Subscription>;

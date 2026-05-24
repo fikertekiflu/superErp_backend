@@ -30,6 +30,7 @@ export enum FieldType {
   IMAGE = 'image',
   DECIMAL = 'decimal',
   INTEGER = 'integer',
+  LOOKUP = 'lookup',
 }
 
 @TypeORMEntity('entities')
@@ -56,6 +57,13 @@ export class Entity {
   })
   @Column({ nullable: true })
   description: string;
+
+  @ApiProperty({
+    example: 'Leads',
+    description: 'Plural display name for lists and menus',
+  })
+  @Column({ nullable: true })
+  pluralName: string;
 
   @ApiProperty({
     example: ['name', 'price', 'quantity'],
@@ -123,6 +131,9 @@ export interface FieldDefinition {
   unique: boolean;
   defaultValue?: any;
   options?: string[]; // For select/multi_select fields
+  relatedEntityId?: string; // For lookup fields — target entity definition
+  relatedEntitySlug?: string;
+  displayField?: string; // Field name on related record to show in UI (defaults to first list field)
   validation?: {
     min?: number;
     max?: number;

@@ -488,4 +488,62 @@ export class AttendanceService {
       employeeSummaries
     };
   }
+
+  async getTeamAttendance(date: Date, tenantId: string): Promise<Attendance[]> {
+    return this.getDailyAttendance(date, tenantId);
+  }
+
+  async listAdjustments(
+    tenantId: string,
+    status?: AdjustmentStatus,
+    employeeId?: string,
+  ): Promise<AttendanceAdjustment[]> {
+    const where: Record<string, unknown> = { tenantId };
+    if (status) where.status = status;
+    if (employeeId) where.employeeId = employeeId;
+
+    return this.adjustmentRepository.find({
+      where,
+      relations: ['employee', 'attendance'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async listAttendanceLogs(
+    tenantId: string,
+    startDate: Date,
+    endDate: Date,
+    employeeId?: string,
+  ): Promise<AttendanceLog[]> {
+    const where: Record<string, unknown> = {
+      tenantId,
+      checkTime: Between(startDate, endDate),
+    };
+    if (employeeId) where.employeeId = employeeId;
+
+    return this.attendanceLogRepository.find({
+      where,
+      relations: ['employee'],
+      order: { checkTime: 'DESC' },
+    });
+  }
+
+  async listPolicies(tenantId: string): Promise<AttendancePolicy[]> {
+    return this.policyRepository.find({
+      where: { tenantId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async createPolicy(
+    tenantId: string,
+    policyData: Partial<AttendancePolicy>,
+  ): Promise<AttendancePolicy> {
+    const policy = this.policyRepository.create({
+      ...policyData,
+      tenantId,
+      isActive: policyData.isActive ?? true,
+    });
+    return this.policyRepository.save(policy);
+  }
 }

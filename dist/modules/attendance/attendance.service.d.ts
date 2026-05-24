@@ -2,7 +2,7 @@ import { Repository } from 'typeorm';
 import { Attendance, AttendanceStatus } from './entities/attendance.entity';
 import { AttendanceLog } from './entities/attendance.entity';
 import { AttendancePolicy } from './entities/attendance-policy.entity';
-import { AttendanceAdjustment, AdjustmentType } from './entities/attendance-adjustment.entity';
+import { AttendanceAdjustment, AdjustmentType, AdjustmentStatus } from './entities/attendance-adjustment.entity';
 import { Employee } from '../hrm/entities/employee.entity';
 import { Tenant } from '../tenants/tenant.entity';
 export declare class AttendanceService {
@@ -67,4 +67,9 @@ export declare class AttendanceService {
             totalHours: number;
         }>;
     }>;
+    getTeamAttendance(date: Date, tenantId: string): Promise<Attendance[]>;
+    listAdjustments(tenantId: string, status?: AdjustmentStatus, employeeId?: string): Promise<AttendanceAdjustment[]>;
+    listAttendanceLogs(tenantId: string, startDate: Date, endDate: Date, employeeId?: string): Promise<AttendanceLog[]>;
+    listPolicies(tenantId: string): Promise<AttendancePolicy[]>;
+    createPolicy(tenantId: string, policyData: Partial<AttendancePolicy>): Promise<AttendancePolicy>;
 }

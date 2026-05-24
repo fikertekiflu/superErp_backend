@@ -201,10 +201,8 @@ export class AttendanceController {
   ): Promise<Attendance[]> {
     const tenantId = req.user.tenantId;
     const targetDate = date ? new Date(date) : new Date();
-    
-    // This would need to be implemented based on team/department relationships
-    // For now, return empty array as placeholder
-    return [];
+
+    return this.attendanceService.getTeamAttendance(targetDate, tenantId);
   }
 
   @Get('hr/daily')
@@ -292,9 +290,9 @@ export class AttendanceController {
     @Query('status') status?: AdjustmentStatus,
     @Query('employeeId') employeeId?: string
   ): Promise<AttendanceAdjustment[]> {
-    // This would need to be implemented in the service
-    // For now, return empty array as placeholder
-    return [];
+    const tenantId = req.user.tenantId;
+
+    return this.attendanceService.listAdjustments(tenantId, status, employeeId);
   }
 
   @Put('adjustments/:id/approve')
@@ -335,18 +333,21 @@ export class AttendanceController {
     @Request() req,
     @Query('employeeId') employeeId?: string
   ): Promise<AttendanceLog[]> {
-    // This would need to be implemented in the service
-    // For now, return empty array as placeholder
-    return [];
+    const tenantId = req.user.tenantId;
+
+    return this.attendanceService.listAttendanceLogs(
+      tenantId,
+      new Date(startDate),
+      new Date(endDate),
+      employeeId,
+    );
   }
 
   @Get('policies')
   @ApiOperation({ summary: 'Get attendance policies' })
   @ApiResponse({ status: 200, description: 'Policies retrieved' })
   async getPolicies(@Request() req): Promise<AttendancePolicy[]> {
-    // This would need to be implemented in the service
-    // For now, return empty array as placeholder
-    return [];
+    return this.attendanceService.listPolicies(req.user.tenantId);
   }
 
   @Post('policies')
@@ -356,8 +357,6 @@ export class AttendanceController {
     @Body() policyData: Partial<AttendancePolicy>,
     @Request() req
   ): Promise<AttendancePolicy> {
-    // This would need to be implemented in the service
-    // For now, return empty object as placeholder
-    return {} as AttendancePolicy;
+    return this.attendanceService.createPolicy(req.user.tenantId, policyData);
   }
 }

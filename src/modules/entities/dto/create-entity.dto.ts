@@ -24,6 +24,11 @@ export class CreateEntityDto {
   @IsOptional()
   description?: string;
 
+  @ApiProperty({ example: 'Leads', required: false })
+  @IsString()
+  @IsOptional()
+  pluralName?: string;
+
   @ApiProperty({ example: 'briefcase', required: false })
   @IsString()
   @IsOptional()

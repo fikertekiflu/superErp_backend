@@ -41,6 +41,7 @@ let User = class User {
     passwordResetToken;
     passwordResetExpiresAt;
     isActive;
+    approvalLimitOverride;
     createdAt;
     updatedAt;
     tenant;
@@ -118,6 +119,10 @@ __decorate([
     (0, typeorm_1.Column)({ default: true }),
     __metadata("design:type", Boolean)
 ], User.prototype, "isActive", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'decimal', precision: 14, scale: 2, nullable: true }),
+    __metadata("design:type", Object)
+], User.prototype, "approvalLimitOverride", void 0);
 __decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)

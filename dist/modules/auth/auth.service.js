@@ -47,12 +47,15 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthService = void 0;
 const common_1 = require("@nestjs/common");
+const config_1 = require("@nestjs/config");
 const jwt_1 = require("@nestjs/jwt");
 const typeorm_1 = require("@nestjs/typeorm");
 const typeorm_2 = require("typeorm");
 const bcrypt = __importStar(require("bcrypt"));
+const crypto_1 = require("crypto");
 const user_entity_1 = require("../users/user.entity");
 const tenants_service_1 = require("../tenants/tenants.service");
+const email_service_1 = require("../email/email.service");
 const tenant_entity_1 = require("../tenants/tenant.entity");
 const subscriptions_service_1 = require("../subscriptions/subscriptions.service");
 const plan_entity_1 = require("../subscriptions/plan.entity");
@@ -60,13 +63,105 @@ const subscription_entity_1 = require("../subscriptions/subscription.entity");
 let AuthService = class AuthService {
     userRepository;
     jwtService;
+    configService;
+    emailService;
     tenantsService;
     subscriptionsService;
-    constructor(userRepository, jwtService, tenantsService, subscriptionsService) {
+    constructor(userRepository, jwtService, configService, emailService, tenantsService, subscriptionsService) {
         this.userRepository = userRepository;
         this.jwtService = jwtService;
+        this.configService = configService;
+        this.emailService = emailService;
         this.tenantsService = tenantsService;
         this.subscriptionsService = subscriptionsService;
+    }
+    hashResetToken(token) {
+        return (0, crypto_1.createHash)('sha256').update(token).digest('hex');
+    }
+    getFrontendBaseUrl() {
+        return (this.configService.get('APP_PUBLIC_URL') ||
+            this.configService.get('FRONTEND_URL') ||
+            'http://localhost:3001').replace(/\/$/, '');
+    }
+    async forgotPassword(dto) {
+        const email = dto.email.trim().toLowerCase();
+        const user = await this.userRepository
+            .createQueryBuilder('user')
+            .leftJoinAndSelect('user.tenant', 'tenant')
+            .where('LOWER(user.email) = :email', { email })
+            .getOne();
+        const genericMessage = 'If an account exists for that email, you will receive password reset instructions shortly.';
+        if (!user || !user.isActive || user.status !== user_entity_1.UserStatus.ACTIVE) {
+            return { message: genericMessage };
+        }
+        const rawToken = (0, crypto_1.randomBytes)(32).toString('hex');
+        const tokenHash = this.hashResetToken(rawToken);
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+        await this.userRepository.update(user.id, {
+            passwordResetToken: tokenHash,
+            passwordResetExpiresAt: expiresAt,
+        });
+        const resetUrl = `${this.getFrontendBaseUrl()}/auth/reset-password?token=${rawToken}`;
+        const emailResult = await this.emailService.sendPasswordResetEmail(user.email, resetUrl, {
+            userName: user.firstName || undefined,
+            companyName: user.tenant?.name,
+            expiresMinutes: 60,
+        });
+        const isDev = this.configService.get('NODE_ENV', 'development') !==
+            'production';
+        return {
+            message: genericMessage,
+            emailSent: emailResult.sent,
+            ...(isDev && !emailResult.sent
+                ? {
+                    devResetUrl: resetUrl,
+                    devHint: emailResult.error
+                        ? `Email not sent: ${emailResult.error} Use the reset link below (development only).`
+                        : emailResult.skippedReason
+                            ? `Email not sent (${emailResult.skippedReason}). Use the reset link below (development only).`
+                            : 'Email not configured — use the reset link below (development only).',
+                }
+                : {}),
+            ...(isDev && emailResult.error ? { emailError: emailResult.error } : {}),
+        };
+    }
+    async validatePasswordResetToken(token) {
+        if (!token?.trim()) {
+            return { valid: false };
+        }
+        const user = await this.userRepository.findOne({
+            where: {
+                passwordResetToken: this.hashResetToken(token.trim()),
+                passwordResetExpiresAt: (0, typeorm_2.MoreThan)(new Date()),
+            },
+        });
+        return { valid: !!user };
+    }
+    async resetPassword(dto) {
+        const token = dto.token.trim();
+        const user = await this.userRepository.findOne({
+            where: {
+                passwordResetToken: this.hashResetToken(token),
+                passwordResetExpiresAt: (0, typeorm_2.MoreThan)(new Date()),
+            },
+        });
+        if (!user) {
+            throw new common_1.BadRequestException('Invalid or expired reset link. Request a new password reset.');
+        }
+        const hashedPassword = await bcrypt.hash(dto.password, 10);
+        await this.userRepository
+            .createQueryBuilder()
+            .update(user_entity_1.User)
+            .set({
+            password: hashedPassword,
+            passwordResetToken: () => 'NULL',
+            passwordResetExpiresAt: () => 'NULL',
+        })
+            .where('id = :id', { id: user.id })
+            .execute();
+        return {
+            message: 'Password updated successfully. You can sign in with your new password.',
+        };
     }
     async login(loginDto) {
         const { email, password } = loginDto;
@@ -286,6 +381,8 @@ exports.AuthService = AuthService = __decorate([
     __param(0, (0, typeorm_1.InjectRepository)(user_entity_1.User)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
         jwt_1.JwtService,
+        config_1.ConfigService,
+        email_service_1.EmailService,
         tenants_service_1.TenantsService,
         subscriptions_service_1.SubscriptionsService])
 ], AuthService);

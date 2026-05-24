@@ -3,6 +3,8 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -14,6 +16,19 @@ import { CreateWorkflowDto } from './dto/create-workflow.dto';
 import { UpdateWorkflowDto } from './dto/update-workflow.dto';
 import { Entity as DynamicEntity } from '../entities/entity.entity';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import { Role } from '../roles/role.entity';
+import { DeployWorkflowTemplateDto } from './dto/deploy-workflow-template.dto';
+import { WorkflowAutomationService } from './workflow-automation.service';
+import {
+  WorkflowExecution,
+  ExecutionStatus,
+} from './workflow-execution.entity';
+import { WorkflowEvent } from './workflow-event.entity';
+import { Task } from '../tasks/task.entity';
+import { Notification } from '../notifications/notification.entity';
+import { EntitiesService, EntityAuthContext } from '../entities/entities.service';
+import { UserRole } from '../users/user.entity';
+import { findBlueprintForSlug } from '../../common/catalog/template-entity-blueprints';
 
 @Injectable()
 export class WorkflowsService {
@@ -26,10 +41,31 @@ export class WorkflowsService {
     private workflowStatesRepository: Repository<WorkflowState>,
     @InjectRepository(WorkflowTransition)
     private workflowTransitionsRepository: Repository<WorkflowTransition>,
+    @InjectRepository(WorkflowExecution)
+    private workflowExecutionsRepository: Repository<WorkflowExecution>,
+    @InjectRepository(WorkflowEvent)
+    private workflowEventsRepository: Repository<WorkflowEvent>,
+    @InjectRepository(Task)
+    private taskRepository: Repository<Task>,
+    @InjectRepository(Notification)
+    private notificationRepository: Repository<Notification>,
     @InjectRepository(DynamicEntity)
     private entitiesRepository: Repository<DynamicEntity>,
+    @InjectRepository(Role)
+    private roleRepository: Repository<Role>,
     private subscriptionsService: SubscriptionsService,
+    private workflowAutomationService: WorkflowAutomationService,
+    @Inject(forwardRef(() => EntitiesService))
+    private entitiesService: EntitiesService,
   ) {}
+
+  private entityAuth(userId: string, tenantId: string): EntityAuthContext {
+    return {
+      userId,
+      tenantId,
+      systemRole: UserRole.TENANT_ADMIN,
+    };
+  }
 
   async create(
     createWorkflowDto: CreateWorkflowDto,
@@ -139,17 +175,45 @@ export class WorkflowsService {
     return this.findOne(id, tenantId);
   }
 
-  async remove(id: string, tenantId?: string): Promise<void> {
-    const workflow = await this.findOne(id, tenantId);
+  async remove(id: string, tenantId?: string): Promise<{ deleted: boolean }> {
+    await this.findOne(id, tenantId);
 
-    // Check if workflow is active
-    if (workflow.status === WorkflowStatus.ACTIVE) {
-      throw new ForbiddenException(
-        'Cannot delete an active workflow. Deactivate it first.',
-      );
-    }
+    await this.workflowsRepository.manager.transaction(async (manager) => {
+      const workflow = await manager.findOne(Workflow, {
+        where: { id, tenantId },
+      });
+      if (!workflow) {
+        throw new NotFoundException('Workflow not found');
+      }
 
-    await this.workflowsRepository.delete(id);
+      if (workflow.status === WorkflowStatus.ACTIVE) {
+        await manager.update(Workflow, id, {
+          status: WorkflowStatus.PAUSED,
+        });
+      }
+
+      const executions = await manager.find(WorkflowExecution, {
+        where: { workflowId: id },
+        select: ['id'],
+      });
+      const executionIds = executions.map((e) => e.id);
+
+      if (executionIds.length > 0) {
+        await manager.delete(Task, { executionId: In(executionIds) });
+        await manager.delete(WorkflowEvent, { executionId: In(executionIds) });
+        await manager.delete(Notification, {
+          executionId: In(executionIds),
+        });
+        await manager.delete(WorkflowExecution, { workflowId: id });
+      }
+
+      await manager.delete(WorkflowTransition, { workflowId: id });
+      await manager.delete(WorkflowState, { workflowId: id });
+      await manager.delete(WorkflowStep, { workflowId: id });
+      await manager.delete(Workflow, { id });
+    });
+
+    return { deleted: true };
   }
 
   async activate(
@@ -245,8 +309,16 @@ export class WorkflowsService {
   ): Promise<WorkflowStep> {
     const workflow = await this.findOne(workflowId, tenantId);
 
+    let config = stepData.config;
+    if (stepData.type === 'automation' && config) {
+      config = this.workflowAutomationService.normalizeStepConfig(
+        config as Record<string, unknown>,
+      );
+    }
+
     const step = this.workflowStepsRepository.create({
       ...stepData,
+      config,
       workflow: { id: workflowId },
     });
 
@@ -269,7 +341,17 @@ export class WorkflowsService {
       throw new NotFoundException(`Step with ID ${stepId} not found`);
     }
 
-    await this.workflowStepsRepository.update(stepId, stepData);
+    const patch = { ...stepData };
+    if (
+      (patch.type === 'automation' || step.type === 'automation') &&
+      patch.config
+    ) {
+      patch.config = this.workflowAutomationService.normalizeStepConfig(
+        patch.config as Record<string, unknown>,
+      );
+    }
+
+    await this.workflowStepsRepository.update(stepId, patch);
     const updated = await this.workflowStepsRepository.findOne({
       where: { id: stepId },
     });
@@ -313,8 +395,22 @@ export class WorkflowsService {
       relations: ['createdBy'],
     });
 
+    const totalExecutions = await this.workflowExecutionsRepository.count({
+      where: { tenantId },
+    });
+    const completedExecutions =
+      await this.workflowExecutionsRepository.count({
+        where: { tenantId, status: ExecutionStatus.COMPLETED },
+      });
+    const successRate =
+      totalExecutions > 0
+        ? Math.round((completedExecutions / totalExecutions) * 1000) / 10
+        : 100;
+
     return {
       totalWorkflows,
+      totalExecutions,
+      successRate,
       statusBreakdown: statusCounts,
       recentWorkflows: recentWorkflows.map((wf) => ({
         id: wf.id,
@@ -338,6 +434,15 @@ export class WorkflowsService {
 
     if (!workflow) {
       throw new NotFoundException('Workflow not found');
+    }
+
+    const duplicate = await this.workflowStatesRepository.findOne({
+      where: { workflowId, key: stateData.key },
+    });
+    if (duplicate) {
+      throw new BadRequestException(
+        `State key "${stateData.key}" already exists in this workflow`,
+      );
     }
 
     const state = this.workflowStatesRepository.create({
@@ -486,5 +591,401 @@ export class WorkflowsService {
     }
 
     await this.workflowTransitionsRepository.delete(transitionId);
+  }
+
+  async deployFromTemplate(
+    dto: DeployWorkflowTemplateDto,
+    userId: string,
+    tenantId: string,
+  ): Promise<Workflow> {
+    let workflowId: string | null = null;
+
+    try {
+      return await this.deployFromTemplateInternal(
+        dto,
+        userId,
+        tenantId,
+        (id) => {
+          workflowId = id;
+        },
+      );
+    } catch (error) {
+      if (workflowId) {
+        try {
+          await this.remove(workflowId, tenantId);
+        } catch (cleanupErr) {
+          console.error(
+            `Failed to roll back partial template deploy ${workflowId}`,
+            cleanupErr,
+          );
+        }
+      }
+      throw error;
+    }
+  }
+
+  private async deployFromTemplateInternal(
+    dto: DeployWorkflowTemplateDto,
+    userId: string,
+    tenantId: string,
+    onWorkflowCreated?: (workflowId: string) => void,
+  ): Promise<Workflow> {
+    const trigger = Object.values(WorkflowTrigger).includes(
+      dto.trigger as WorkflowTrigger,
+    )
+      ? (dto.trigger as WorkflowTrigger)
+      : WorkflowTrigger.MANUAL;
+
+    const seedEntities = dto.seedEntities !== false;
+    const { assignments: entityAssignments, createdEntitySlugs, linkedEntitySlugs } =
+      await this.resolveEntityAssignmentsWithSeed(
+        tenantId,
+        userId,
+        dto.entityAssignments || [],
+        dto.entitySlugs || [],
+        seedEntities,
+      );
+
+    const workflow = await this.create(
+      {
+        name: dto.name,
+        description: dto.description,
+        trigger,
+        status: WorkflowStatus.DRAFT,
+        entityAssignments,
+        config: {
+          templateId: dto.templateId,
+          deployedFrom: 'template',
+          deployedAt: new Date().toISOString(),
+          linkedEntitySlugs,
+          createdEntitySlugs,
+        },
+      },
+      userId,
+      tenantId,
+    );
+
+    onWorkflowCreated?.(workflow.id);
+
+    const stateKeyToId: Record<string, string> = {};
+    const sortedStates = [...dto.states].sort(
+      (a, b) => (a.order ?? 0) - (b.order ?? 0),
+    );
+
+    for (const state of sortedStates) {
+      const created = await this.createState(
+        workflow.id,
+        {
+          name: state.name,
+          key: state.key,
+          description: state.description,
+          order: state.order ?? 0,
+        },
+        tenantId,
+      );
+      stateKeyToId[state.key] = created.id;
+    }
+
+    const roleNameToId = await this.buildRoleNameMap(
+      tenantId,
+      dto,
+      dto.seedRoles !== false,
+    );
+
+    for (const transition of dto.transitions) {
+      const fromStateId = stateKeyToId[transition.fromState];
+      const toStateId = stateKeyToId[transition.toState];
+      if (!fromStateId || !toStateId) {
+        throw new BadRequestException(
+          `Invalid transition states: ${transition.fromState} -> ${transition.toState}`,
+        );
+      }
+
+      const requiredRoleId = transition.requiredRole
+        ? roleNameToId[transition.requiredRole.trim().toLowerCase()]
+        : undefined;
+
+      await this.createTransition(
+        workflow.id,
+        {
+          name: transition.name,
+          fromStateId,
+          toStateId,
+          requiredRoleId,
+        },
+        tenantId,
+      );
+    }
+
+    const sortedSteps = [...dto.steps].sort(
+      (a, b) => (a.order ?? 0) - (b.order ?? 0),
+    );
+
+    for (const step of sortedSteps) {
+      let config = this.resolveStepConfig(step.config, roleNameToId);
+      if (step.type === 'automation') {
+        config = this.workflowAutomationService.normalizeStepConfig(
+          config as Record<string, unknown>,
+        ) as typeof config;
+      }
+
+      await this.addStep(
+        workflow.id,
+        {
+          name: step.name,
+          description: step.description,
+          type: step.type,
+          order: step.order ?? 1,
+          config,
+        },
+        tenantId,
+      );
+    }
+
+    if (dto.activate) {
+      return this.activate(workflow.id, userId, tenantId);
+    }
+
+    return this.findOne(workflow.id, tenantId);
+  }
+
+  private collectTemplateRoleNames(dto: DeployWorkflowTemplateDto): string[] {
+    const names = new Set<string>();
+    for (const t of dto.transitions) {
+      if (t.requiredRole?.trim()) names.add(t.requiredRole.trim());
+    }
+    for (const step of dto.steps) {
+      const roles = step.config?.assignToRoles;
+      if (Array.isArray(roles)) {
+        for (const r of roles) {
+          if (typeof r === 'string' && r.trim()) names.add(r.trim());
+        }
+      }
+    }
+    return [...names];
+  }
+
+  private async buildRoleNameMap(
+    tenantId: string,
+    dto: DeployWorkflowTemplateDto,
+    seedMissing: boolean,
+  ): Promise<Record<string, string>> {
+    const map: Record<string, string> = {};
+    const existing = await this.roleRepository.find({
+      where: { tenant: { id: tenantId }, isActive: true },
+    });
+
+    for (const role of existing) {
+      map[role.name.trim().toLowerCase()] = role.id;
+    }
+
+    if (!seedMissing) return map;
+
+    for (const name of this.collectTemplateRoleNames(dto)) {
+      const key = name.toLowerCase();
+      if (map[key]) continue;
+
+      const created = await this.roleRepository.save(
+        this.roleRepository.create({
+          name,
+          description: 'Auto-created from workflow template',
+          tenant: { id: tenantId },
+          isActive: true,
+          entityPermissions: [],
+        }),
+      );
+      map[key] = created.id;
+    }
+
+    return map;
+  }
+
+  private async resolveEntityAssignmentsWithSeed(
+    tenantId: string,
+    userId: string,
+    explicit: Array<{
+      entityId: string;
+      permissions?: Record<string, boolean>;
+    }>,
+    slugs: string[],
+    seedEntities: boolean,
+  ): Promise<{
+    assignments: Array<{
+      entityId: string;
+      permissions: {
+        canCreate: boolean;
+        canRead: boolean;
+        canUpdate: boolean;
+        canDelete: boolean;
+      };
+    }>;
+    createdEntitySlugs: string[];
+    linkedEntitySlugs: string[];
+  }> {
+    const createdEntitySlugs: string[] = [];
+    const linkedEntitySlugs: string[] = [];
+
+    if (seedEntities && slugs.length > 0) {
+      const seeded = await this.ensureTemplateEntities(tenantId, userId, slugs);
+      createdEntitySlugs.push(...seeded.created);
+      linkedEntitySlugs.push(...seeded.linked);
+    }
+
+    const assignments = await this.resolveEntityAssignments(
+      tenantId,
+      explicit,
+      slugs,
+    );
+
+    for (const a of assignments) {
+      const entity = await this.entitiesRepository.findOne({
+        where: { id: a.entityId, tenantId },
+      });
+      if (entity?.slug && !linkedEntitySlugs.includes(entity.slug)) {
+        linkedEntitySlugs.push(entity.slug);
+      }
+    }
+
+    return {
+      assignments,
+      createdEntitySlugs,
+      linkedEntitySlugs: [...new Set(linkedEntitySlugs)],
+    };
+  }
+
+  private async ensureTemplateEntities(
+    tenantId: string,
+    userId: string,
+    requestedSlugs: string[],
+  ): Promise<{ created: string[]; linked: string[] }> {
+    const created: string[] = [];
+    const linked: string[] = [];
+    const processedBlueprints = new Set<string>();
+    const auth = this.entityAuth(userId, tenantId);
+
+    for (const rawSlug of requestedSlugs) {
+      const blueprint = findBlueprintForSlug(rawSlug);
+      if (!blueprint || processedBlueprints.has(blueprint.slug)) {
+        continue;
+      }
+      processedBlueprints.add(blueprint.slug);
+
+      const candidates = [blueprint.slug, ...blueprint.aliases];
+      let existing: DynamicEntity | null = null;
+      for (const candidate of candidates) {
+        existing = await this.entitiesRepository.findOne({
+          where: { slug: candidate, tenantId },
+        });
+        if (existing) break;
+      }
+
+      if (existing) {
+        linked.push(existing.slug);
+        continue;
+      }
+
+      try {
+        const saved = await this.entitiesService.create(
+          blueprint.definition,
+          auth,
+        );
+        created.push(saved.slug);
+        linked.push(saved.slug);
+      } catch (err: any) {
+        const msg = err?.message || '';
+        if (msg.includes('already exists')) {
+          const again = await this.entitiesRepository.findOne({
+            where: { slug: blueprint.slug, tenantId },
+          });
+          if (again) linked.push(again.slug);
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    return { created, linked };
+  }
+
+  private async resolveEntityAssignments(
+    tenantId: string,
+    explicit: Array<{
+      entityId: string;
+      permissions?: Record<string, boolean>;
+    }>,
+    slugs: string[],
+  ): Promise<
+    Array<{
+      entityId: string;
+      permissions: {
+        canCreate: boolean;
+        canRead: boolean;
+        canUpdate: boolean;
+        canDelete: boolean;
+      };
+    }>
+  > {
+    const defaultPerms = {
+      canCreate: true,
+      canRead: true,
+      canUpdate: true,
+      canDelete: false,
+    };
+
+    const byEntityId = new Map<
+      string,
+      {
+        entityId: string;
+        permissions: typeof defaultPerms;
+      }
+    >();
+
+    for (const item of explicit) {
+      byEntityId.set(item.entityId, {
+        entityId: item.entityId,
+        permissions: {
+          canCreate: item.permissions?.canCreate ?? defaultPerms.canCreate,
+          canRead: item.permissions?.canRead ?? defaultPerms.canRead,
+          canUpdate: item.permissions?.canUpdate ?? defaultPerms.canUpdate,
+          canDelete: item.permissions?.canDelete ?? defaultPerms.canDelete,
+        },
+      });
+    }
+
+    for (const slug of slugs) {
+      const blueprint = findBlueprintForSlug(slug);
+      const candidates = blueprint
+        ? [blueprint.slug, ...blueprint.aliases]
+        : [slug];
+
+      for (const candidate of candidates) {
+        const entity = await this.entitiesRepository.findOne({
+          where: { slug: candidate, tenantId },
+        });
+        if (entity && !byEntityId.has(entity.id)) {
+          byEntityId.set(entity.id, {
+            entityId: entity.id,
+            permissions: defaultPerms,
+          });
+          break;
+        }
+      }
+    }
+
+    return [...byEntityId.values()];
+  }
+
+  private resolveStepConfig(
+    config: Record<string, unknown> | undefined,
+    roleNameToId: Record<string, string>,
+  ): Record<string, unknown> | undefined {
+    if (!config) return config;
+    const next = { ...config };
+    if (Array.isArray(next.assignToRoles)) {
+      next.assignToRoles = (next.assignToRoles as string[])
+        .map((name) => roleNameToId[name.trim().toLowerCase()] || name)
+        .filter(Boolean);
+    }
+    return next;
   }
 }
