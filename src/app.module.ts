@@ -15,6 +15,7 @@ import { WorkflowsModule } from './modules/workflows/workflows.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { HrmModule } from './modules/hrm/hrm.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
+import { ProductsModule } from './modules/products/products.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
@@ -45,6 +46,7 @@ import { EmailModule } from './modules/email/email.module';
     SubscriptionsModule,
     HrmModule,
     InvoicesModule,
+    ProductsModule,
     TasksModule,
     NotificationsModule,
     AttendanceModule,

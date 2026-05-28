@@ -15,6 +15,7 @@ const invoice_entity_1 = require("./invoice.entity");
 let InvoiceItem = class InvoiceItem {
     id;
     description;
+    productId;
     quantity;
     unitPrice;
     total;
@@ -30,6 +31,10 @@ __decorate([
     (0, typeorm_1.Column)(),
     __metadata("design:type", String)
 ], InvoiceItem.prototype, "description", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], InvoiceItem.prototype, "productId", void 0);
 __decorate([
     (0, typeorm_1.Column)({ type: 'decimal', precision: 12, scale: 2 }),
     __metadata("design:type", Number)

@@ -9,6 +9,9 @@ export class InvoiceItem {
   @Column()
   description: string;
 
+  @Column({ nullable: true })
+  productId: string;
+
   @Column({ type: 'decimal', precision: 12, scale: 2 })
   quantity: number;
 
